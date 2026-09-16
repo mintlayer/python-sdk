@@ -1,0 +1,407 @@
+"""Core WASM machinery shared by all method mixins.
+
+:class:`~mintlayer.wasm.client.Client` combines this core with the per-area
+method mixins (keys, addresses, transactions, ...).
+
+Key material in memory: result buffers carrying private keys, derived keys and
+signatures are zeroed before being released, but input buffers and WASM-side
+intermediate copies of secrets persist in WASM linear memory until the
+allocator reuses them (inherited from the wasm-bindgen design; the host cannot
+reach them). Treat the process memory of a long-lived ``Client`` as sensitive.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import hashlib
+import threading
+from pathlib import Path
+from typing import Any
+
+from wasmtime import Engine, Instance, Linker, Memory, Module, Store, Table
+
+from .types import Amount, WasmError
+
+_WASM_PATH = Path(__file__).parent / "wasm_wrappers_bg.wasm"
+_WASM_BYTES = _WASM_PATH.read_bytes()
+
+
+def _verify_wasm_integrity() -> None:
+    """Fail closed if the vendored WASM binary does not match its pinned hash."""
+    pin_path = _WASM_PATH.with_suffix(".wasm.sha256")
+    expected = pin_path.read_text().split()[0].strip()
+    actual = hashlib.sha256(_WASM_BYTES).hexdigest()
+    if actual != expected:
+        raise WasmError(
+            f"mintlayer: WASM binary integrity check failed "
+            f"(expected sha256 {expected}, got {actual})"
+        )
+
+
+_verify_wasm_integrity()
+
+
+class _CallState:
+    """Per-call side channel populated by host functions."""
+
+    __slots__ = ("err_msg", "last_json")
+
+    def __init__(self) -> None:
+        self.err_msg: str = ""
+        self.last_json: bytearray | None = None
+
+    def reset(self) -> None:
+        self.err_msg = ""
+        self.last_json = None
+
+
+class _WasmCore:
+    """Core WASM machinery: lifecycle, call conventions and memory helpers."""
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.call_state = _CallState()
+        self._last_err_msg = ""
+        self._last_json: bytearray | None = None
+
+        engine = Engine()
+        self._engine = engine
+        self.store = Store(engine)
+        self._module = Module(engine, _WASM_BYTES)
+        linker = Linker(engine)
+
+        from .host import register_host_functions
+
+        register_host_functions(self, linker)
+
+        instance = linker.instantiate(self.store, self._module)
+        self._instance: Instance | None = instance
+
+        raw_exports = instance.exports(self.store)
+        exports = {name: raw_exports[name] for name in raw_exports}
+        self._exports = exports
+        memory = exports.get("memory")
+        if not isinstance(memory, Memory):
+            raise WasmError("mintlayer: memory export not found")
+        self.memory: Memory = memory
+        table = exports.get("__wbindgen_externrefs")
+        if not isinstance(table, Table):
+            raise WasmError("mintlayer: __wbindgen_externrefs table not found")
+        self.table: Table = table
+
+    # ── lifecycle ────────────────────────────────────────────────────────────
+
+    def close(self) -> None:
+        """Release WASM resources. Subsequent calls raise."""
+        with self.lock:
+            self._instance = None
+            self._exports = {}
+            self.memory = None  # type: ignore[assignment]
+            self.table = None  # type: ignore[assignment]
+
+    def __enter__(self) -> _WasmCore:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    # ── export lookup ────────────────────────────────────────────────────────
+
+    def get_export(self, name: str) -> Any:
+        return self._exports.get(name)
+
+    def _fn(self, name: str) -> Any:
+        fn = self._exports.get(name)
+        if fn is None:
+            if self._instance is None:
+                raise WasmError("mintlayer: client is closed")
+            raise WasmError(f'mintlayer: function "{name}" not found')
+        return fn
+
+    # ── low-level call ───────────────────────────────────────────────────────
+
+    def _call(self, name: str, *params: Any) -> list:
+        """Execute a WASM export and return the raw results."""
+        self._last_err_msg = ""
+        self._last_json = None
+        self.call_state.reset()
+        fn = self._fn(name)
+        try:
+            res = fn(self.store, *params)
+        except Exception as exc:
+            # WasmThrow (from the host's __wbindgen_throw) and traps land here.
+            if self.call_state.err_msg:
+                raise WasmError(f"mintlayer: {self.call_state.err_msg}") from None
+            raise WasmError(f"mintlayer: call {name}: {exc}") from None
+        self._last_err_msg = self.call_state.err_msg
+        self._last_json = self.call_state.last_json
+        # Func.__call__ returns None / scalar / list depending on result count.
+        if res is None:
+            return []
+        if not isinstance(res, list):
+            return [res]
+        return res
+
+    def _extract_error(self, err_idx: int) -> WasmError:
+        if self._last_err_msg:
+            return WasmError(f"mintlayer: {self._last_err_msg}")
+        return WasmError(f"mintlayer: wasm returned error (ref={err_idx})")
+
+    # ── call-return conventions ──────────────────────────────────────────────
+
+    def _call_return_bytes(self, name: str, *params: Any) -> bytes:
+        """fn expects [ptr, len, errRef, errFlag]."""
+        ret = self._call(name, *params)
+        if len(ret) >= 4 and ret[3] != 0:
+            raise self._extract_error(ret[2])
+        if len(ret) < 2:
+            raise WasmError(f"mintlayer: unexpected return count from {name}")
+        ptr, length = ret[0], ret[1]
+        if length == 0:
+            return b""
+        data = self._read_bytes(ptr, length)
+        if data is None:
+            raise WasmError("mintlayer: memory read failed")
+        with contextlib.suppress(Exception):
+            self.memory.write(self.store, b"\x00" * length, ptr)
+        self._free_wasm(ptr, length)
+        return bytes(data)
+
+    def _call_return_bytes_no_err(self, name: str, *params: Any) -> bytes:
+        """fn expects [ptr, len] (infallible)."""
+        ret = self._call(name, *params)
+        if len(ret) < 2:
+            raise WasmError(f"mintlayer: unexpected return count from {name}")
+        ptr, length = ret[0], ret[1]
+        if length == 0:
+            return b""
+        data = self._read_bytes(ptr, length)
+        if data is None:
+            raise WasmError("mintlayer: memory read failed")
+        with contextlib.suppress(Exception):
+            self.memory.write(self.store, b"\x00" * length, ptr)
+        self._free_wasm(ptr, length)
+        return bytes(data)
+
+    def _call_return_string(self, name: str, *params: Any) -> str:
+        """fn expects [ptr, len, errRef, errFlag]; result is UTF-8."""
+        ret = self._call(name, *params)
+        if len(ret) >= 4 and ret[3] != 0:
+            raise self._extract_error(ret[2])
+        if len(ret) < 2:
+            raise WasmError(f"mintlayer: unexpected return count from {name}")
+        ptr, length = ret[0], ret[1]
+        data = self._read_bytes(ptr, length)
+        if data is None:
+            raise WasmError("mintlayer: memory read failed")
+        with contextlib.suppress(Exception):
+            self.memory.write(self.store, b"\x00" * length, ptr)
+        self._free_wasm(ptr, length)
+        return bytes(data).decode("utf-8")
+
+    def _call_return_bool(self, name: str, *params: Any) -> bool:
+        """fn expects [bool, errRef, errFlag]."""
+        ret = self._call(name, *params)
+        if len(ret) >= 3 and ret[2] != 0:
+            raise self._extract_error(ret[1])
+        return ret[0] != 0
+
+    def _call_return_u32(self, name: str, *params: Any) -> int:
+        """fn expects [u32, errRef, errFlag]."""
+        ret = self._call(name, *params)
+        if len(ret) >= 3 and ret[2] != 0:
+            raise self._extract_error(ret[1])
+        return ret[0] & 0xFFFFFFFF
+
+    def _call_return_u64(self, name: str, *params: Any) -> int:
+        """fn expects [u64, errRef, errFlag]."""
+        ret = self._call(name, *params)
+        if len(ret) >= 3 and ret[2] != 0:
+            raise self._extract_error(ret[1])
+        return ret[0] & 0xFFFFFFFFFFFFFFFF
+
+    def _call_return_amount(self, name: str, *params: Any) -> Amount:
+        """fn returns a single Amount pointer (infallible)."""
+        ret = self._call(name, *params)
+        if len(ret) == 0:
+            raise WasmError(f"mintlayer: no return value from {name}")
+        return self._read_amount(ret[0])
+
+    def _call_return_amount_fallible(self, name: str, *params: Any) -> Amount:
+        """fn expects [amtPtr, errRef, errFlag]."""
+        ret = self._call(name, *params)
+        if len(ret) >= 3 and ret[2] != 0:
+            raise self._extract_error(ret[1])
+        if len(ret) == 0:
+            raise WasmError(f"mintlayer: no return value from {name}")
+        return self._read_amount(ret[0])
+
+    def _call_void_fallible(self, name: str, *params: Any) -> None:
+        """fn expects [errRef, errFlag] (void on success)."""
+        ret = self._call(name, *params)
+        if len(ret) >= 2 and ret[1] != 0:
+            raise self._extract_error(ret[0])
+
+    def _call_return_json(self, name: str, *params: Any) -> bytes:
+        """fn returns a JSON object captured by the host's JSON.parse."""
+        ret = self._call(name, *params)
+        if len(ret) >= 3 and ret[2] != 0:
+            raise self._extract_error(ret[1])
+        if self._last_json is not None:
+            return bytes(self._last_json)
+        raise WasmError(f"mintlayer: no JSON result from {name}")
+
+    # ── memory helpers ───────────────────────────────────────────────────────
+
+    def _read_bytes(self, ptr: int, length: int) -> bytearray | None:
+        return self.memory.read(self.store, ptr, ptr + length)
+
+    def _write_bytes(self, data: bytes) -> tuple[int, int]:
+        """Copy ``data`` into WASM heap; returns (ptr, len). Caller frees."""
+        if not data:
+            return 0, 0
+        ptr = self._invoke1("__wbindgen_malloc", len(data), 1)
+        if self.memory.write(self.store, data, ptr) is None:
+            raise WasmError("mintlayer: memory write failed")
+        return ptr, len(data)
+
+    def _write_string(self, s: str) -> tuple[int, int]:
+        return self._write_bytes(s.encode("utf-8"))
+
+    def _free_wasm(self, ptr: int, size: int, align: int = 1) -> None:
+        if ptr == 0:
+            return
+        with contextlib.suppress(Exception):
+            self._fn("__wbindgen_free")(self.store, ptr, size, align)
+
+    def _write_optional_string(self, s: str | None) -> tuple[int, int]:
+        if s is None:
+            return 0, 0
+        return self._write_string(s)
+
+    def _write_optional_bytes(self, b: bytes | None) -> tuple[int, int]:
+        if b is None:
+            return 0, 0
+        return self._write_bytes(b)
+
+    def _new_wasm_amount(self, amount: Amount) -> int:
+        """Allocate an Amount in the WASM heap and return its handle.
+
+        ``amount_from_atoms`` takes ownership of the string allocation, so the
+        string is NOT freed here.
+        """
+        str_ptr, str_len = self._write_string(amount.atoms)
+        try:
+            return self._invoke1("amount_from_atoms", str_ptr, str_len)
+        except WasmError:
+            self._free_wasm(str_ptr, str_len)
+            raise
+
+    def _read_amount(self, wasm_ptr: int) -> Amount:
+        """Read the atom string from a WASM Amount handle (consumes it)."""
+        ret = self._call_export("amount_atoms", wasm_ptr)
+        if len(ret) < 2:
+            raise WasmError("mintlayer: amount_atoms failed")
+        ptr, length = ret[0], ret[1]
+        data = self._read_bytes(ptr, length)
+        if data is None:
+            raise WasmError("mintlayer: memory read for amount failed")
+        atoms = data.decode("utf-8")
+        self._free_wasm(ptr, length)
+        return Amount.from_atoms(atoms)
+
+    # ── externref-index arrays (passArrayJsValueToWasm0 pattern) ─────────────
+    #
+    # Ownership: the WASM callee takes ownership of BOTH the index array and
+    # the Uint8Array backing buffers during the call. Host-side cleanup must
+    # therefore only release the externref table slots (exactly once each) and
+    # must never re-read or free the array memory after the call.
+
+    def _write_string_array(self, strs: list[str]) -> tuple[int, list[int]]:
+        """Write ``[string]`` as an array of externref table indices.
+
+        Returns (array_ptr, table_indices). Release the table slots with
+        :meth:`_dealloc_indices` after the call; the array itself is owned by
+        the callee (passArrayJsValueToWasm0 ownership transfer).
+        """
+        indices: list[int] = []
+        if not strs:
+            return 0, indices
+        arr_ptr = self._malloc_array(len(strs))
+        try:
+            for i, s in enumerate(strs):
+                idx = self._invoke1("__externref_table_alloc")
+                indices.append(idx)
+                self.table.set(self.store, idx, s)
+                self.memory.write(self.store, idx.to_bytes(4, "little"), arr_ptr + i * 4)
+        except BaseException:
+            self._dealloc_indices(indices)
+            with contextlib.suppress(Exception):
+                self._fn("__wbindgen_free")(self.store, arr_ptr, len(strs) * 4, 4)
+            raise
+        return arr_ptr, indices
+
+    def _write_uint8_array_array(
+        self, slices: list[bytes]
+    ) -> tuple[int, list[int], list[tuple[int, int]]]:
+        """Write ``[bytes]`` as an array of externref table indices.
+
+        Each slice is copied into WASM heap and wrapped as a Uint8Array.
+        Returns (array_ptr, table_indices, backing_buffers). Release the table
+        slots with :meth:`_dealloc_indices` and free the backing buffers
+        (host-side) after the call: the callee copies the bytes and never
+        frees the originals; the index array itself is callee-owned.
+        """
+        from .host import Uint8ArrayRef
+
+        indices: list[int] = []
+        buffers: list[tuple[int, int]] = []
+        if not slices:
+            return 0, indices, buffers
+        arr_ptr = self._malloc_array(len(slices))
+        try:
+            for i, b in enumerate(slices):
+                wasm_ptr, wasm_len = self._write_bytes(b)
+                buffers.append((wasm_ptr, wasm_len))
+                idx = self._invoke1("__externref_table_alloc")
+                indices.append(idx)
+                self.table.set(self.store, idx, Uint8ArrayRef(wasm_ptr, wasm_len))
+                self.memory.write(self.store, idx.to_bytes(4, "little"), arr_ptr + i * 4)
+        except BaseException:
+            self._dealloc_indices(indices)
+            for ptr, length in buffers:
+                self._free_wasm(ptr, length)
+            with contextlib.suppress(Exception):
+                self._fn("__wbindgen_free")(self.store, arr_ptr, len(slices) * 4, 4)
+            raise
+        return arr_ptr, indices, buffers
+
+    def _malloc_array(self, count: int) -> int:
+        return self._invoke1("__wbindgen_malloc", count * 4, 4)
+
+    def _call_export(self, name: str, *params: Any) -> list:
+        """Call a WASM export, normalising the result to a list."""
+        res = self._fn(name)(self.store, *params)
+        if res is None:
+            return []
+        if not isinstance(res, list):
+            return [res]
+        return res
+
+    def _invoke1(self, name: str, *params: Any) -> int:
+        """Call a WASM export returning exactly one i32/i64 result."""
+        ret = self._call_export(name, *params)
+        if len(ret) != 1:
+            raise WasmError(f"mintlayer: {name} returned {len(ret)} results")
+        return ret[0]
+
+    def _dealloc_indices(self, indices: list[int]) -> None:
+        """Release externref table slots (exactly once per slot)."""
+        if not indices:
+            return
+        dealloc = self.get_export("__externref_table_dealloc")
+        if dealloc is None:
+            return
+        for idx in indices:
+            with contextlib.suppress(Exception):
+                dealloc(self.store, idx)

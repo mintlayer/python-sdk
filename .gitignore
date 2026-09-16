@@ -9,5 +9,19 @@ build/
 .ruff_cache/
 .pytest_cache/
 .coverage
+htmlcov/
 .wrangler/
 uv.lock
+
+# secrets
+.env*
+*.pem
+*.key
+*.seed
+*.env
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+secrets/
