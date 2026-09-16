@@ -8,7 +8,8 @@ go-sdk/wallet/client.go:
 * monotonically increasing integer request IDs starting at 1,
 * HTTP Basic Auth applied only when a username is set (and never sourced
   from the environment — ``.netrc`` lookup is suppressed for sessions the
-  client creates itself),
+  client creates itself; caller-supplied sessions keep their own
+  ``trust_env`` behavior),
 * no per-call cancellation: timeouts are configured on the client
   (Go's per-call ``context`` has no direct requests equivalent),
 * the HTTP status code is never inspected — a JSON-RPC ``error`` object in the
