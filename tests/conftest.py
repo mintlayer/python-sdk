@@ -12,9 +12,14 @@ Mirrors the httptest helpers in go-sdk/node/client_test.go, using the stdlib
 * :class:`Capture` -- records the last request (method name, params, headers,
   path, raw body, request count) plus every echoed request id, so tests can
   pin exact wire shapes.
+* :func:`make_rest_server` -- plain REST server for the indexer client:
+  answers GET *and* POST with a canned JSON payload (or verbatim raw text),
+  any HTTP status, and records the HTTP verb, path, query string, headers,
+  and raw body on a :class:`RESTCapture`.
 
 Prefer the :func:`rpc_server` fixture: it is a factory that starts servers
-(threading daemons) and guarantees shutdown in teardown.
+(threading daemons) and guarantees shutdown in teardown. The indexer REST
+tests use the :func:`rest_server` factory fixture, which works the same way.
 """
 
 from __future__ import annotations
@@ -226,6 +231,146 @@ def rpc_server():
             handle = make_raw_rpc_server(raw)
         else:
             handle = make_rpc_server(result)
+        handles.append(handle)
+        return handle
+
+    yield _start
+
+    for handle in handles:
+        handle.stop()
+
+
+# --- REST servers (indexer client) -------------------------------------------
+
+
+class RESTCapture(Capture):
+    """Capture for the REST servers.
+
+    The inherited ``method`` field holds the *HTTP verb* (``"GET"`` /
+    ``"POST"``), ``path`` the path *without* the query string, and ``query``
+    the raw query string (``""`` when absent). ``raw_body`` carries the
+    verbatim request body (empty for GET).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.query: str | None = None
+        self.verbs: list[str] = []
+        self.paths: list[str] = []
+        self.queries: list[str] = []
+
+    def record_rest(
+        self,
+        *,
+        verb: str,
+        path: str,
+        query: str,
+        headers: dict[str, str],
+        raw_body: bytes,
+    ) -> None:
+        with self._lock:
+            self.method = verb
+            self.params = None
+            self.headers = dict(headers)
+            self.path = path
+            self.query = query
+            self.raw_body = raw_body
+            self.request_count += 1
+            self.request_ids.append(None)
+            self.payloads.append({})
+            self.verbs.append(verb)
+            self.paths.append(path)
+            self.queries.append(query)
+
+
+def _make_rest_handler(capture: RESTCapture, body: bytes, status: int, content_type: str):
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def _handle(self) -> None:
+            length = int(self.headers.get("Content-Length") or 0)
+            raw_body = self.rfile.read(length) if length else b""
+            path, _, query = self.path.partition("?")
+            capture.record_rest(
+                verb=self.command,
+                path=path,
+                query=query,
+                headers={str(k).lower(): str(v) for k, v in self.headers.items()},
+                raw_body=raw_body,
+            )
+            self._respond(status, body)
+
+        do_GET = _handle
+        do_POST = _handle
+
+        def _respond(self, status: int, body: bytes) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass  # keep test output clean
+
+    return Handler
+
+
+def make_rest_server(
+    payload: Any = None,
+    *,
+    raw: str | bytes | None = None,
+    status: int = 200,
+    content_type: str = "application/json",
+) -> ServerHandle:
+    """Start a REST server answering every GET/POST identically.
+
+    ``payload`` is JSON-encoded; ``raw`` (string or bytes) is served verbatim
+    instead, pinning exact wire shapes. ``status`` may be any code, e.g. 404
+    or 500, to exercise the error paths. Prefer the :func:`rest_server`
+    fixture so servers are always stopped.
+    """
+    if raw is not None:
+        body = raw if isinstance(raw, bytes) else str(raw).encode("utf-8")
+    else:
+        body = json.dumps(payload).encode("utf-8")
+    capture = RESTCapture()
+    httpd = ThreadingHTTPServer((_HOST, 0), _make_rest_handler(capture, body, status, content_type))
+    thread = threading.Thread(
+        target=httpd.serve_forever,
+        daemon=True,
+        name="rest-test-server",
+    )
+    thread.start()
+    return ServerHandle(httpd=httpd, capture=capture, thread=thread)
+
+
+@pytest.fixture
+def rest_server():
+    """Factory fixture that starts/stops in-process REST test servers.
+
+    Usage::
+
+        srv = rest_server(payload={"block_height": 1})
+        client = indexer.Client(srv.url)
+        client.get_tip()
+        assert srv.capture.path == "/api/v2/chain/tip"
+
+    Keyword alternatives: ``raw="<text>"`` to serve a verbatim body, ``status``
+    for arbitrary HTTP status codes (404/500), and ``content_type`` to pin the
+    response Content-Type. Every server started through the factory is shut
+    down in teardown.
+    """
+    handles: list[ServerHandle] = []
+
+    def _start(
+        payload: Any = None,
+        *,
+        raw: str | bytes | None = None,
+        status: int = 200,
+        content_type: str = "application/json",
+    ) -> ServerHandle:
+        handle = make_rest_server(payload, raw=raw, status=status, content_type=content_type)
         handles.append(handle)
         return handle
 

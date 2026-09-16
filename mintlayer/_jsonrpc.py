@@ -104,5 +104,6 @@ class JSONRPCClient:
         return body.get("result")
 
     def close(self) -> None:
-        """Close the underlying HTTP session."""
-        self._session.close()
+        """Close the HTTP session (only if the client created it)."""
+        if self._owns_session:
+            self._session.close()
