@@ -108,3 +108,27 @@ class JSONRPCClient:
         """Close the HTTP session (only if the client created it)."""
         if self._owns_session:
             self._session.close()
+
+
+class BaseJSONRPCClient:
+    """Mixin base shared by the node and wallet clients.
+
+    Both clients wrap a :class:`JSONRPCClient` as ``self._rpc`` and share the
+    raw-call and session-lifecycle helpers below. Typed result decoding stays
+    in each package's ``_core`` module (mirroring the separate Go node/wallet
+    packages).
+    """
+
+    _rpc: JSONRPCClient
+
+    def _call(self, method: str, params: Any) -> Any:
+        """Call and return the decoded JSON result (None for JSON null)."""
+        return self._rpc.call(method, params)
+
+    def _call_ignore(self, method: str, params: Any) -> None:
+        """Call and discard the result (void methods)."""
+        self._rpc.call(method, params)
+
+    def close(self) -> None:
+        """Close the underlying HTTP session."""
+        self._rpc.close()

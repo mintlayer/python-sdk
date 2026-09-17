@@ -4,21 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from mintlayer._jsonrpc import JSONRPCClient, JSONRPCError
+from mintlayer._jsonrpc import BaseJSONRPCClient, JSONRPCError
+
+from .types import Amount
 
 
-class _NodeCore:
-    """Thin wrapper over the JSON-RPC transport with typed result helpers."""
-
-    _rpc: JSONRPCClient
-
-    def _call(self, method: str, params: Any) -> Any:
-        """Call and return the decoded JSON result (None for JSON null)."""
-        return self._rpc.call(method, params)
-
-    def _call_ignore(self, method: str, params: Any) -> None:
-        """Call and discard the result (void methods)."""
-        self._rpc.call(method, params)
+class _NodeCore(BaseJSONRPCClient):
+    """Node-specific typed result helpers over the shared JSON-RPC base."""
 
     def _call_str(self, method: str, params: Any) -> str:
         result = self._rpc.call(method, params)
@@ -50,12 +42,6 @@ class _NodeCore:
         result = self._rpc.call(method, params)
         return [str(item) for item in result or []]
 
-    def _call_opt_amount(self, method: str, params: Any) -> Any:
-        from .types import Amount
-
+    def _call_opt_amount(self, method: str, params: Any) -> Amount | None:
         result = self._rpc.call(method, params)
         return Amount.from_json(result) if result is not None else None
-
-    def close(self) -> None:
-        """Close the underlying HTTP session."""
-        self._rpc.close()
