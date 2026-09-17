@@ -25,7 +25,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@c7f87aa956e4bb3fa984f422a52ffa2ccc4abd77 # v5.4.2
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
           # uv.lock is intentionally gitignored for this library, so key the
@@ -62,7 +62,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@c7f87aa956e4bb3fa984f422a52ffa2ccc4abd77 # v5.4.2
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
@@ -90,7 +90,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@c7f87aa956e4bb3fa984f422a52ffa2ccc4abd77 # v5.4.2
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
