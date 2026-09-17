@@ -8,11 +8,7 @@ from __future__ import annotations
 
 from requests import Session
 
-from mintlayer._jsonrpc import (
-    JSONRPCClient,
-    JSONRPCError,  # noqa: F401  (re-exported)
-    RPCError,
-)
+from mintlayer._jsonrpc import JSONRPCClient, JSONRPCError, RPCError
 
 from ._core import _NodeCore
 from .chainstate import ChainstateMixin

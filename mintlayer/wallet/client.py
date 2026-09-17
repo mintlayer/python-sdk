@@ -4,11 +4,7 @@ from __future__ import annotations
 
 import requests
 
-from mintlayer._jsonrpc import (  # noqa: F401  (JSONRPCError re-exported)
-    JSONRPCClient,
-    JSONRPCError,
-    RPCError,
-)
+from mintlayer._jsonrpc import JSONRPCClient, JSONRPCError, RPCError
 
 from ._core import _WalletCore
 from .management import ManagementMixin
