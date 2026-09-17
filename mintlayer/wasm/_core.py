@@ -312,17 +312,27 @@ class _WasmCore:
 
     # ── externref-index arrays (passArrayJsValueToWasm0 pattern) ─────────────
     #
-    # Ownership: the WASM callee takes ownership of BOTH the index array and
-    # the Uint8Array backing buffers during the call. Host-side cleanup must
-    # therefore only release the externref table slots (exactly once each) and
-    # must never re-read or free the array memory after the call.
+    # Ownership: during the call the WASM callee takes ownership of the index
+    # array, the externref table slots, and (for Uint8Array entries) reads and
+    # copies the backing buffers. The callee itself releases the index array
+    # and deallocs the table slots, so the host must never re-read the array
+    # or dealloc the slots after the call — doing so double-frees free-list
+    # entries and corrupts later allocations ("array contains a value of the
+    # wrong type" on subsequent multi-element calls). The Uint8Array backing
+    # buffers, however, are malloc'd host-side and only copied by the callee
+    # (to_vec): the host frees those after the call.
+    #
+    # Known wasm-bindgen trait: a FAILING array call leaks a few slots (the
+    # callee's error path skips part of its cleanup). Not soundly fixable
+    # host-side — never "compensate" by dealloc'ing, which is worse.
 
     def _write_string_array(self, strs: list[str]) -> tuple[int, list[int]]:
         """Write ``[string]`` as an array of externref table indices.
 
-        Returns (array_ptr, table_indices). Release the table slots with
-        :meth:`_dealloc_indices` after the call; the array itself is owned by
-        the callee (passArrayJsValueToWasm0 ownership transfer).
+        Returns (array_ptr, table_indices). The index array and the slots
+        become callee-owned once the call is made — never call
+        :meth:`_dealloc_indices` on them afterwards (only pre-call rollback,
+        which this method already handles internally).
         """
         indices: list[int] = []
         if not strs:
@@ -396,7 +406,12 @@ class _WasmCore:
         return ret[0]
 
     def _dealloc_indices(self, indices: list[int]) -> None:
-        """Release externref table slots (exactly once per slot)."""
+        """Release externref table slots.
+
+        ONLY for pre-call rollback (a write failed before the callee ever ran).
+        After a call, the slots are callee-owned — deallocating them again
+        corrupts the table free list.
+        """
         if not indices:
             return
         dealloc = self.get_export("__externref_table_dealloc")

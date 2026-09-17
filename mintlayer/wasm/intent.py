@@ -38,7 +38,8 @@ class IntentMixin(_WasmCore):
                 "encode_signed_transaction_intent", msg_ptr, msg_len, sigs_ptr, len(sigs_indices)
             )
         finally:
-            self._dealloc_indices(sigs_indices)
+            # Slots and the index array are callee-owned; the backing buffers
+            # were host-malloc'd and only copied by the callee (to_vec).
             for ptr, length in sigs_buffers:
                 self._free_wasm(ptr, length)
 
@@ -57,16 +58,14 @@ class IntentMixin(_WasmCore):
         msg_ptr, msg_len = self._write_bytes(expected_signed_message)
         intent_ptr, intent_len = self._write_bytes(encoded_signed_intent)
         dests_ptr, dests_indices = self._write_string_array(input_destinations)
-        try:
-            self._call_void_fallible(
-                "verify_transaction_intent",
-                msg_ptr,
-                msg_len,
-                intent_ptr,
-                intent_len,
-                dests_ptr,
-                len(dests_indices),
-                int(network),
-            )
-        finally:
-            self._dealloc_indices(dests_indices)
+        # Index array and slots are callee-owned; nothing to release.
+        self._call_void_fallible(
+            "verify_transaction_intent",
+            msg_ptr,
+            msg_len,
+            intent_ptr,
+            intent_len,
+            dests_ptr,
+            len(dests_indices),
+            int(network),
+        )

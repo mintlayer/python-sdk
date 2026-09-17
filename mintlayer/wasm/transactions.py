@@ -54,18 +54,22 @@ class TransactionsMixin(_WasmCore):
         dests_ptr, dests_indices = self._write_string_array(input_utxos_dests)
         try:
             out_ptr, out_len = self._write_bytes(outputs)
-            return self._call_return_u32(
-                "estimate_transaction_size",
-                in_ptr,
-                in_len,
-                dests_ptr,
-                len(dests_indices),
-                out_ptr,
-                out_len,
-                int(network),
-            )
-        finally:
+        except BaseException:
+            # The callee never ran, so the host still owns the slots.
             self._dealloc_indices(dests_indices)
+            raise
+        # From here the callee owns the index array and the table slots (it
+        # deallocs both); no post-call cleanup is needed.
+        return self._call_return_u32(
+            "estimate_transaction_size",
+            in_ptr,
+            in_len,
+            dests_ptr,
+            len(dests_indices),
+            out_ptr,
+            out_len,
+            int(network),
+        )
 
     @synchronized
     def encode_signed_transaction(self, transaction: bytes, signatures: bytes) -> bytes:
