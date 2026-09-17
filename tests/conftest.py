@@ -378,3 +378,22 @@ def rest_server():
 
     for handle in handles:
         handle.stop()
+
+
+# --- WASM client (fully offline) ----------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def wasm():
+    """A session-wide offline WASM :class:`~mintlayer.wasm.Client`.
+
+    Instantiating the client compiles the embedded WASM module, which is
+    relatively expensive, so one instance is shared across the whole session.
+    Every public method serialises on the client's own lock. Tests that need
+    to close a client (lifecycle tests) must instantiate their own.
+    """
+    from mintlayer.wasm import Client as WasmClient
+
+    client = WasmClient()
+    yield client
+    client.close()
