@@ -8,6 +8,7 @@ body; transport/decode failures raise :class:`IndexerError`.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -25,6 +26,11 @@ class HTTPError(Exception):
         super().__init__(f"HTTP {status_code}: {body}")
         self.status_code = status_code
         self.body = body
+
+
+def _seg(value: Any) -> str:
+    """URL-encode a path segment (defense against path traversal/injection)."""
+    return quote(str(value), safe="")
 
 
 class IndexerHTTP:
