@@ -21,6 +21,9 @@ Usage:
         --amount 100000000000 \
         --indexer http://127.0.0.1:3000
 
+NOTE: Secrets passed via command-line arguments are visible in
+shell history and `ps` output; use stdin/env vars in production.
+
 NOTE: This example sends ALL spendable UTXOs to the recipient with no change
 output. It is intentionally minimal. Production code should select UTXOs,
 compute fees, add a change output, and handle errors more robustly.

@@ -260,6 +260,9 @@ class WalletTx:
 class MnemonicContent:
     mnemonic: str
 
+    def __repr__(self) -> str:  # pragma: no cover - trivial
+        return "MnemonicContent(mnemonic='<redacted>')"
+
 
 @dataclass(frozen=True)
 class MnemonicResult:
@@ -302,6 +305,15 @@ class CreateWalletParams:
             "hardware_wallet": self.hardware_wallet,
         }
 
+    def __repr__(self) -> str:
+        return (
+            f"CreateWalletParams(path={self.path!r}, "
+            f"store_seed_phrase={self.store_seed_phrase!r}, "
+            f"mnemonic={'<redacted>' if self.mnemonic else None}, "
+            f"passphrase={'<redacted>' if self.passphrase else None}, "
+            f"hardware_wallet={self.hardware_wallet!r})"
+        )
+
 
 @dataclass(frozen=True)
 class RecoverWalletParams:
@@ -319,6 +331,15 @@ class RecoverWalletParams:
             "passphrase": self.passphrase,
             "hardware_wallet": self.hardware_wallet,
         }
+
+    def __repr__(self) -> str:
+        return (
+            f"RecoverWalletParams(path={self.path!r}, "
+            f"store_seed_phrase={self.store_seed_phrase!r}, "
+            f"mnemonic='<redacted>', "
+            f"passphrase={'<redacted>' if self.passphrase else None}, "
+            f"hardware_wallet={self.hardware_wallet!r})"
+        )
 
 
 @dataclass(frozen=True)

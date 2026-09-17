@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from ._core import _NodeCore
 from .types import FeeRate, FeeRatePoint, MempoolTx, TrustPolicy
 from .types import policy_value as _policy_value
-
-if TYPE_CHECKING:
-    pass
 
 
 class MempoolMixin(_NodeCore):

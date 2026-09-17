@@ -5,13 +5,10 @@ Not-found results (JSON ``null``) map to ``None``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ._core import _NodeCore
 from .types import Amount, ChainstateInfo, Currency, OrderInfo, Outpoint, TokenInfo
-
-if TYPE_CHECKING:
-    pass
 
 
 class ChainstateMixin(_NodeCore):

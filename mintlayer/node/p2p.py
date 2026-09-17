@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING
 
 from ._core import _NodeCore
 from .types import BannedPeer, PeerInfo, TrustPolicy
 from .types import policy_value as _policy_value
-
-if TYPE_CHECKING:
-    pass
 
 
 def _duration_to_wire(duration: timedelta) -> list[int]:
