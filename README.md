@@ -48,11 +48,13 @@ sub-modules directly when you only need one.
 ```python
 import mintlayer
 
-client = mintlayer.Client(mintlayer.Config(
-    node_url="http://127.0.0.1:3030",
-    indexer_url="http://127.0.0.1:3000",
-    wallet_url="http://127.0.0.1:3034",
-))
+client = mintlayer.Client(
+    mintlayer.Config(
+        node_url="http://127.0.0.1:3030",
+        indexer_url="http://127.0.0.1:3000",
+        wallet_url="http://127.0.0.1:3034",
+    )
+)
 
 # Query the chain tip from the indexer.
 tip = client.indexer.get_tip()
@@ -68,7 +70,7 @@ pub_key = client.wasm.public_key_from_private_key(priv_key)
 addr = client.wasm.pubkey_to_pubkeyhash_address(pub_key, mintlayer.MAINNET)
 print("address:", addr)
 
-client.close()   # or use `with mintlayer.Client(cfg) as client:`
+client.close()  # or use `with mintlayer.Client(cfg) as client:`
 ```
 
 `Config` only constructs the sub-clients whose URL field is non-empty
@@ -87,9 +89,9 @@ from mintlayer.node import Client
 
 c = Client(
     "http://127.0.0.1:3030",
-    username="user",   # optional
-    password="pass",   # optional
-    timeout=10.0,      # optional, seconds
+    username="user",  # optional
+    password="pass",  # optional
+    timeout=10.0,  # optional, seconds
 )
 
 # Chain state
@@ -138,7 +140,7 @@ tx_ids = c.get_block_transaction_ids("00000000...")
 
 # Transaction
 tx = c.get_transaction("aabbcc...")
-tx_id = c.submit_transaction(signed_tx_hex)   # requires --enable-post-routes
+tx_id = c.submit_transaction(signed_tx_hex)  # requires --enable-post-routes
 
 # Address
 utxos = c.get_spendable_utxos("mtc1q...")
@@ -189,35 +191,41 @@ c.sync_wallet()
 
 # Accounts and addresses
 info = c.get_wallet_info()
-addr = c.new_address(0)              # account 0
+addr = c.new_address(0)  # account 0
 balance = c.get_balance(0)
 
 # Send coins (account 0, auto fee)
-result = c.address_send(SendParams(
-    account=0,
-    address="mtc1q...",
-    amount=Amount(atoms="100000000000"),   # 1 ML
-))
+result = c.address_send(
+    SendParams(
+        account=0,
+        address="mtc1q...",
+        amount=Amount(atoms="100000000000"),  # 1 ML
+    )
+)
 print("tx id:", result.tx_id)
 
 # Token operations
-issue_result = c.issue_token(IssueTokenParams(
-    account=0,
-    destination_address=addr,
-    metadata=TokenMetadata(
-        token_ticker="MYTOKEN",
-        number_of_decimals=2,
-        metadata_uri="https://example.com/token",
-        token_supply=TokenSupply(type="Lockable"),
-        is_freezable=False,
-    ),
-))
-mint_result = c.mint_tokens(MintParams(
-    account=0,
-    token_id=issue_result.token_id,
-    address=addr,
-    amount=Amount(atoms="1000"),
-))
+issue_result = c.issue_token(
+    IssueTokenParams(
+        account=0,
+        destination_address=addr,
+        metadata=TokenMetadata(
+            token_ticker="MYTOKEN",
+            number_of_decimals=2,
+            metadata_uri="https://example.com/token",
+            token_supply=TokenSupply(type="Lockable"),
+            is_freezable=False,
+        ),
+    )
+)
+mint_result = c.mint_tokens(
+    MintParams(
+        account=0,
+        token_id=issue_result.token_id,
+        address=addr,
+        amount=Amount(atoms="1000"),
+    )
+)
 
 # Staking
 c.start_staking(0)
@@ -252,7 +260,9 @@ from mintlayer.wasm import Client as WasmClient
 c = WasmClient()
 
 # Key derivation (BIP-44 path 44'/mintlayer_coin_type'/0')
-mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+mnemonic = (
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+)
 account_key = c.make_default_account_privkey(mnemonic, Network.MAINNET)
 recv_key = c.make_receiving_address(account_key, 0)
 pub_key = c.public_key_from_private_key(recv_key)
@@ -263,12 +273,12 @@ src_id = c.encode_outpoint_source_id(tx_id_bytes, SOURCE_TRANSACTION)
 input_ = c.encode_input_for_utxo(src_id, output_index)
 
 output = c.encode_output_transfer(
-    Amount(atoms="100000000000"),   # 1 ML
+    Amount(atoms="100000000000"),  # 1 ML
     dest_addr,
     Network.MAINNET,
 )
 
-tx = c.encode_transaction(input_, output, 0)   # flags = 0
+tx = c.encode_transaction(input_, output, 0)  # flags = 0
 tx_id = c.get_transaction_id(tx, True)
 
 # Signing
@@ -277,8 +287,8 @@ witness = c.encode_witness(
     recv_key,
     addr,
     tx,
-    utxo_bytes,          # see docs/transactions.md for the encoding details
-    0,                   # input index
+    utxo_bytes,  # see docs/transactions.md for the encoding details
+    0,  # input index
     TxAdditionalInfo(),
     block_height,
     Network.MAINNET,
@@ -300,11 +310,13 @@ walkthrough.
 
 ```python
 # Node + WASM only — no wallet or indexer client is created.
-client = mintlayer.Client(mintlayer.Config(
-    node_url="http://127.0.0.1:3030",
-    username="user",
-    password="pass",
-))
+client = mintlayer.Client(
+    mintlayer.Config(
+        node_url="http://127.0.0.1:3030",
+        username="user",
+        password="pass",
+    )
+)
 
 # Call init_wasm() before using client.wasm (raises WasmError otherwise).
 client.init_wasm()
@@ -334,9 +346,9 @@ decimal string of _atoms_ — the smallest indivisible unit. **1 ML =
 ```python
 from mintlayer.wasm import Amount
 
-one = Amount.from_atoms("100000000000")   # 1 ML
+one = Amount.from_atoms("100000000000")  # 1 ML
 zero = Amount.zero()
-print(one.atoms)   # "100000000000"
+print(one.atoms)  # "100000000000"
 ```
 
 The indexer and wallet clients use their own `Amount` dataclass with both

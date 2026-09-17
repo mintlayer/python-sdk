@@ -20,15 +20,17 @@ from mintlayer.wallet import Amount, Client, CreatePoolParams
 
 wc = Client("http://127.0.0.1:3034")
 
-result = wc.create_stake_pool(CreatePoolParams(
-    account=0,
-    amount=Amount(atoms="40000000000000"),   # minimum pledge
-    cost_per_block=Amount(atoms="100000000"),  # flat fee per block
-    margin_ratio_per_thousand="100",          # 10% staker cut
-    decommission_address=decommission_addr,
-    # staker_address and vrf_public_key default to wallet-managed keys
-    # when None (sent as JSON null)
-))
+result = wc.create_stake_pool(
+    CreatePoolParams(
+        account=0,
+        amount=Amount(atoms="40000000000000"),  # minimum pledge
+        cost_per_block=Amount(atoms="100000000"),  # flat fee per block
+        margin_ratio_per_thousand="100",  # 10% staker cut
+        decommission_address=decommission_addr,
+        # staker_address and vrf_public_key default to wallet-managed keys
+        # when None (sent as JSON null)
+    )
+)
 print(f"tx id: {result.tx_id}")
 ```
 
@@ -44,10 +46,10 @@ predicted before broadcasting with `get_pool_id` (see below).
 ### Starting and stopping block production
 
 ```python
-wc.start_staking(0)    # account 0
+wc.start_staking(0)  # account 0
 
 status = wc.get_staking_status(0)
-print(status)          # StakingStatus.ACTIVE ("Staking") or StakingStatus.INACTIVE ("NotStaking")
+print(status)  # StakingStatus.ACTIVE ("Staking") or StakingStatus.INACTIVE ("NotStaking")
 
 wc.stop_staking(0)
 ```
@@ -66,7 +68,7 @@ for p in pools:
 ### Pool balance
 
 ```python
-balance = wc.get_pool_balance(0, "mpool1...")   # Amount
+balance = wc.get_pool_balance(0, "mpool1...")  # Amount
 ```
 
 Quirk: matching the daemon route, the `account` argument is accepted for API
@@ -77,11 +79,13 @@ consistency but **not sent on the wire** — the route only uses `pool_id`.
 ```python
 from mintlayer.wallet import DecommissionParams
 
-result = wc.decommission_stake_pool(DecommissionParams(
-    account=0,
-    pool_id="mpool1...",
-    output_address=return_addr,
-))
+result = wc.decommission_stake_pool(
+    DecommissionParams(
+        account=0,
+        pool_id="mpool1...",
+        output_address=return_addr,
+    )
+)
 ```
 
 After decommissioning, the pledge is returned to `output_address` after the
@@ -128,19 +132,23 @@ delegation record first, then fund it separately.
 from mintlayer.wallet import Amount, CreateDelegationParams, DelegateParams
 
 # Step 1: create the delegation
-create_result = wc.create_delegation(CreateDelegationParams(
-    account=0,
-    address=owner_addr,   # address that can withdraw funds
-    pool_id="mpool1...",
-))
+create_result = wc.create_delegation(
+    CreateDelegationParams(
+        account=0,
+        address=owner_addr,  # address that can withdraw funds
+        pool_id="mpool1...",
+    )
+)
 print(f"delegation id: {create_result.delegation_id}")
 
 # Step 2: fund the delegation (wait for the creation tx to confirm first)
-delegate_result = wc.delegate_staking(DelegateParams(
-    account=0,
-    amount=Amount(atoms="10000000000000"),   # 100 ML
-    delegation_id=create_result.delegation_id,
-))
+delegate_result = wc.delegate_staking(
+    DelegateParams(
+        account=0,
+        amount=Amount(atoms="10000000000000"),  # 100 ML
+        delegation_id=create_result.delegation_id,
+    )
+)
 ```
 
 You can send multiple `delegate_staking` transactions to the same delegation to
@@ -151,12 +159,14 @@ increase your stake.
 ```python
 from mintlayer.wallet import WithdrawParams
 
-result = wc.withdraw_from_delegation(WithdrawParams(
-    account=0,
-    address=recipient_addr,
-    amount=Amount(atoms="5000000000000"),   # 50 ML
-    delegation_id="mdelg1...",
-))
+result = wc.withdraw_from_delegation(
+    WithdrawParams(
+        account=0,
+        address=recipient_addr,
+        amount=Amount(atoms="5000000000000"),  # 50 ML
+        delegation_id="mdelg1...",
+    )
+)
 ```
 
 Withdrawn funds arrive at `address` after the lock period (determined by
@@ -237,7 +247,7 @@ withdraw_input = c.encode_input_for_withdraw_from_delegation(
 withdraw_output = c.encode_output_lock_then_transfer(
     Amount.from_atoms("5000000000000"),
     recipient_address,
-    lock,   # from encode_lock_for_block_count or similar
+    lock,  # from encode_lock_for_block_count or similar
     Network.MAINNET,
 )
 ```
@@ -264,7 +274,7 @@ pool_data = c.encode_stake_pool_data(
     staker=staker_addr,
     vrf_public_key=vrf_key,
     decommission_key=decommission_addr,
-    margin_ratio_per_thousand=100,      # int here (wallet daemon takes a string)
+    margin_ratio_per_thousand=100,  # int here (wallet daemon takes a string)
     cost_per_block=Amount.from_atoms("100000000"),
     network=Network.MAINNET,
 )

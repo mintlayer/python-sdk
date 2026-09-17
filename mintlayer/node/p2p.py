@@ -11,9 +11,8 @@ from .types import policy_value as _policy_value
 
 def _duration_to_wire(duration: timedelta) -> list[int]:
     """Split a duration into the daemon's [seconds, nanoseconds] wire form."""
-    total_seconds = duration.total_seconds()
-    secs = int(total_seconds)
-    nanos = int(round((total_seconds - secs) * 1_000_000_000))
+    secs = duration.days * 86_400 + duration.seconds
+    nanos = duration.microseconds * 1_000
     return [secs, nanos]
 
 

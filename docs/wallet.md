@@ -9,10 +9,10 @@ from mintlayer.wallet import Client
 
 c = Client(
     "http://127.0.0.1:3034",
-    username="user",       # optional; Basic Auth applied only when set
-    password="pass",       # optional
-    timeout=30.0,          # optional, seconds (default 30.0)
-    session=None,          # optional requests.Session (client owns it otherwise)
+    username="user",  # optional; Basic Auth applied only when set
+    password="pass",  # optional
+    timeout=30.0,  # optional, seconds (default 30.0)
+    session=None,  # optional requests.Session (client owns it otherwise)
 )
 ```
 
@@ -56,10 +56,12 @@ c = Client("http://127.0.0.1:3034")
 
 # 1. Create a wallet file (a fresh 24-word BIP-39 phrase is generated
 #    when params.mnemonic is None).
-result = c.create_wallet(CreateWalletParams(
-    path="/path/to/wallet.dat",
-    store_seed_phrase=False,   # don't persist the phrase to disk
-))
+result = c.create_wallet(
+    CreateWalletParams(
+        path="/path/to/wallet.dat",
+        store_seed_phrase=False,  # don't persist the phrase to disk
+    )
+)
 if result.mnemonic:
     print(result.mnemonic.content.mnemonic)  # store it securely NOW
 
@@ -91,6 +93,7 @@ class CreateWalletParams:
     mnemonic: str | None = None
     passphrase: str | None = None
     hardware_wallet: str | None = None
+
 
 @dataclass(frozen=True)
 class CreateWalletResult:
@@ -203,7 +206,7 @@ Returns the confirmed coin and token balances for an account (the request pins
 @dataclass(frozen=True)
 class Balance:
     coins: Amount
-    tokens: dict[str, Amount]   # keyed by token ID
+    tokens: dict[str, Amount]  # keyed by token ID
 ```
 
 ### `new_address`
@@ -283,6 +286,7 @@ class SendParams:
     selected_utxos: list[Outpoint] | None = None
     options: TxOptions = field(default_factory=TxOptions)
 
+
 @dataclass(frozen=True)
 class SendResult:
     tx_id: str
@@ -303,12 +307,14 @@ class SendResult:
 ```python
 from mintlayer.wallet import Amount, SendParams, TxOptions
 
-result = c.address_send(SendParams(
-    account=0,
-    address="mtc1q...",
-    amount=Amount(atoms="100000000000"),   # 1 ML
-    options=TxOptions(in_top_x_mb=1),      # high fee priority
-))
+result = c.address_send(
+    SendParams(
+        account=0,
+        address="mtc1q...",
+        amount=Amount(atoms="100000000000"),  # 1 ML
+        options=TxOptions(in_top_x_mb=1),  # high fee priority
+    )
+)
 print(result.tx_id, result.fees.coins.atoms, result.broadcasted)
 ```
 
@@ -358,7 +364,7 @@ for advanced flows where you construct outputs manually.
 @dataclass(frozen=True)
 class ComposeParams:
     inputs: list[Outpoint] = field(default_factory=list)
-    outputs: list[Any] = field(default_factory=list)   # raw output objects
+    outputs: list[Any] = field(default_factory=list)  # raw output objects
     htlc_secrets: Any = None
     only_transaction: bool = False
 ```
@@ -538,8 +544,8 @@ from mintlayer.wallet import CreateOrderParams, OutputValue, coin_filter, token_
 
 params = CreateOrderParams(
     account=0,
-    ask=OutputValue.coins(atoms="500000000000"),            # asking 5 ML
-    give=OutputValue.tokens("ttml1...", atoms="1000"),      # giving 1000 tokens
+    ask=OutputValue.coins(atoms="500000000000"),  # asking 5 ML
+    give=OutputValue.tokens("ttml1...", atoms="1000"),  # giving 1000 tokens
     conclude_address="mtc1q...",
 )
 created = c.create_order(params)
@@ -597,11 +603,13 @@ ask_balance, give_balance, is_own)`).
 from mintlayer.wallet import ListOrdersParams, coin_filter, token_filter
 
 # module-level helpers (same as CurrencyFilter.coin_filter() / .token_filter(id))
-orders = c.list_all_active_orders(ListOrdersParams(
-    account=0,
-    ask_currency=coin_filter(),
-    give_currency=token_filter("ttml1..."),
-))
+orders = c.list_all_active_orders(
+    ListOrdersParams(
+        account=0,
+        ask_currency=coin_filter(),
+        give_currency=token_filter("ttml1..."),
+    )
+)
 ```
 
 `CurrencyFilter` (wire: `{"type":"Coin"}` with no content key, or

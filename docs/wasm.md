@@ -7,9 +7,9 @@ wasmtime, sha256-pinned at import).
 ```python
 from mintlayer.wasm import Client
 
-c = Client()          # instantiation compiles the WASM binary: ~400 ms
+c = Client()  # instantiation compiles the WASM binary: ~400 ms
 ...
-c.close()             # or use `with Client() as c:`
+c.close()  # or use `with Client() as c:`
 ```
 
 Call it once per process and reuse it. The `Client` is **safe for concurrent
@@ -24,7 +24,7 @@ from mintlayer.wasm import WasmError
 try:
     addr = c.pubkey_to_pubkeyhash_address(pubkey, Network.MAINNET)
 except WasmError as e:
-    print(e)   # e.g. "mintlayer: invalid public key"
+    print(e)  # e.g. "mintlayer: invalid public key"
 ```
 
 > **Key material in memory:** result buffers carrying private keys, derived
@@ -41,10 +41,10 @@ except WasmError as e:
 ```python
 from mintlayer.wasm import Amount
 
-one = Amount.from_atoms("100000000000")   # 1 ML
+one = Amount.from_atoms("100000000000")  # 1 ML
 zero = Amount.zero()
-print(one.atoms)   # "100000000000"
-print(str(one))    # "100000000000"
+print(one.atoms)  # "100000000000"
+print(str(one))  # "100000000000"
 ```
 
 All amounts are decimal strings of atoms. **1 ML = 100,000,000,000 atoms**
@@ -59,12 +59,12 @@ discriminant:
 
 ```python
 from mintlayer.wasm import (
-    Network,            # MAINNET=0, TESTNET=1, REGTEST=2, SIGNET=3
+    Network,  # MAINNET=0, TESTNET=1, REGTEST=2, SIGNET=3
     SignatureHashType,  # SIGHASH_ALL=0, SIGHASH_NONE=1, SIGHASH_SINGLE=2, SIGHASH_ANYONECANPAY=3
-    SourceId,           # SOURCE_TRANSACTION=0, SOURCE_BLOCK_REWARD=1
-    TotalSupply,        # LOCKABLE=0, UNLIMITED=1, FIXED=2
-    FreezableToken,     # NO=0, YES=1
-    TokenUnfreezable,   # NO=0, YES=1
+    SourceId,  # SOURCE_TRANSACTION=0, SOURCE_BLOCK_REWARD=1
+    TotalSupply,  # LOCKABLE=0, UNLIMITED=1, FIXED=2
+    FreezableToken,  # NO=0, YES=1
+    TokenUnfreezable,  # NO=0, YES=1
 )
 ```
 
@@ -286,7 +286,9 @@ def encode_input_for_unmint_tokens(self, token_id: str, nonce: int, network: Net
 ### `encode_input_for_lock_token_supply`
 
 ```python
-def encode_input_for_lock_token_supply(self, token_id: str, nonce: int, network: Network) -> bytes: ...
+def encode_input_for_lock_token_supply(
+    self, token_id: str, nonce: int, network: Network
+) -> bytes: ...
 ```
 
 ### `encode_input_for_freeze_token`
@@ -835,7 +837,14 @@ Some transaction types (pool operations, orders) require extra data not
 present in the UTXO itself:
 
 ```python
-from mintlayer.wasm import Amount, OrderBalance, OrderInfo, PoolInfo, SimpleCurrencyAmount, TxAdditionalInfo
+from mintlayer.wasm import (
+    Amount,
+    OrderBalance,
+    OrderInfo,
+    PoolInfo,
+    SimpleCurrencyAmount,
+    TxAdditionalInfo,
+)
 
 info = TxAdditionalInfo(
     pool_info={"mpool1...": PoolInfo(staker_balance=Amount.from_atoms("40000000000000"))},

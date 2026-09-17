@@ -34,7 +34,9 @@ Requirements:
 from __future__ import annotations
 
 import argparse
+import getpass
 import logging
+import os
 import sys
 import time
 
@@ -55,7 +57,11 @@ log = logging.getLogger("issue-token")
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wallet", default="", help="path to wallet file (skip if already open)")
-    parser.add_argument("--password", default="", help="wallet password (empty for unencrypted)")
+    parser.add_argument(
+        "--password",
+        default="",
+        help="wallet password; omit to use $WALLET_PASSWORD or a hidden prompt",
+    )
     parser.add_argument("--ticker", required=True, help="token ticker symbol, e.g. MYTOKEN")
     parser.add_argument("--decimals", type=int, default=2, help="number of decimal places (0-18)")
     parser.add_argument("--supply", default="1000000", help="initial mint supply in smallest unit")
@@ -72,6 +78,10 @@ def main() -> None:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    if not args.password:
+        args.password = os.environ.get("WALLET_PASSWORD", "")
+    if not args.password and sys.stdin.isatty():
+        args.password = getpass.getpass("wallet password (input hidden, empty if none): ")
 
     # ── 1. Connect to the wallet daemon ──────────────────────────────────────
     wallet = WalletClient(args.wallet_rpc)

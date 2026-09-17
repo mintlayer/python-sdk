@@ -28,15 +28,13 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
-          # uv.lock is intentionally gitignored for this library, so key the
-          # cache on the dependency manifest instead.
-          cache-dependency-glob: pyproject.toml
+          cache-dependency-glob: uv.lock
 
       - name: Install Python
         run: uv python install 3.12
 
-      - name: Sync dependencies
-        run: uv sync --group dev --python 3.12
+      - name: Sync dependencies (locked)
+        run: uv sync --locked --group dev --python 3.12
 
       - name: Ruff lint
         run: uv run ruff check .
@@ -65,13 +63,13 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
-          cache-dependency-glob: pyproject.toml
+          cache-dependency-glob: uv.lock
 
       - name: Install Python ${{ matrix.python }}
         run: uv python install ${{ matrix.python }}
 
-      - name: Sync dependencies
-        run: uv sync --group dev --python ${{ matrix.python }}
+      - name: Sync dependencies (locked)
+        run: uv sync --locked --group dev --python ${{ matrix.python }}
 
       # WASM init costs ~400 ms per Client; the session-scoped fixture keeps
       # the suite to ~2 min. Coverage gate: total must stay above 80%.
@@ -93,7 +91,7 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
-          cache-dependency-glob: pyproject.toml
+          cache-dependency-glob: uv.lock
 
       - name: Install Python
         run: uv python install 3.12

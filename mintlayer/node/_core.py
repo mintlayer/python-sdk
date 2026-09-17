@@ -30,7 +30,11 @@ class _NodeCore(BaseJSONRPCClient):
 
     def _call_opt_int(self, method: str, params: Any) -> int | None:
         result = self._rpc.call(method, params)
-        return None if result is None else int(result)
+        if result is None:
+            return None
+        if isinstance(result, bool) or not isinstance(result, int):
+            raise JSONRPCError(f"{method}: expected integer result, got {result!r}")
+        return result
 
     def _call_bool(self, method: str, params: Any) -> bool:
         result = self._rpc.call(method, params)
@@ -40,7 +44,11 @@ class _NodeCore(BaseJSONRPCClient):
 
     def _call_str_list(self, method: str, params: Any) -> list[str]:
         result = self._rpc.call(method, params)
-        return [str(item) for item in result or []]
+        if result is None:
+            return []
+        if not isinstance(result, list) or not all(isinstance(item, str) for item in result):
+            raise JSONRPCError(f"{method}: expected list of strings, got {result!r}")
+        return result
 
     def _call_opt_amount(self, method: str, params: Any) -> Amount | None:
         result = self._rpc.call(method, params)

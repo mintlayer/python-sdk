@@ -9,8 +9,8 @@ from mintlayer.indexer import Client
 
 c = Client(
     "http://127.0.0.1:3000",
-    timeout=15.0,   # optional, seconds (default 30.0)
-    session=None,   # optional requests.Session (client owns it otherwise)
+    timeout=15.0,  # optional, seconds (default 30.0)
+    session=None,  # optional requests.Session (client owns it otherwise)
 )
 ```
 
@@ -25,7 +25,7 @@ from mintlayer.indexer import HTTPError, IndexerError
 try:
     info = c.get_address_info("mtc1q...")
 except HTTPError as e:
-    print(e.status_code, e.body)   # e.g. 404 "address not found"
+    print(e.status_code, e.body)  # e.g. 404 "address not found"
 except IndexerError as e:
     ...  # connection failure or malformed JSON body
 ```
@@ -42,8 +42,8 @@ List endpoints accept a `PageOpts` dataclass:
 ```python
 @dataclass(frozen=True)
 class PageOpts:
-    offset: int = 0   # default: 0
-    items: int = 0    # default: 10 (server-side default)
+    offset: int = 0  # default: 0
+    items: int = 0  # default: 10 (server-side default)
 ```
 
 **Zero-omission rule:** zero values are omitted from the query string entirely,
@@ -53,7 +53,7 @@ so the server defaults apply. Only positive values are sent:
 from mintlayer.indexer import PageOpts
 
 c.list_transactions(PageOpts(offset=20, items=50))
-c.list_orders()                       # server defaults
+c.list_orders()  # server defaults
 ```
 
 ---
@@ -159,8 +159,8 @@ fields are empty strings for unconfirmed transactions.
 @dataclass(frozen=True)
 class Transaction:
     id: str
-    inputs: Any               # raw decoded JSON
-    outputs: Any              # raw decoded JSON
+    inputs: Any  # raw decoded JSON
+    outputs: Any  # raw decoded JSON
     block_id: str
     timestamp: str
     confirmations: str
@@ -219,7 +219,7 @@ class AddressInfo:
     coin_balance: Amount
     locked_coin_balance: Amount
     transaction_history: list[str]
-    tokens: list[TokenBalance]     # TokenBalance(token_id, amount)
+    tokens: list[TokenBalance]  # TokenBalance(token_id, amount)
 ```
 
 ### `get_spendable_utxos`
@@ -241,8 +241,8 @@ Returns all UTXOs including those that are locked or otherwise unspendable.
 ```python
 @dataclass(frozen=True)
 class UTXO:
-    outpoint: UTXOOutpoint    # UTXOOutpoint(source_id: str, index: int)
-    output: Any               # raw JSON; note the payload key on the wire is "utxo"
+    outpoint: UTXOOutpoint  # UTXOOutpoint(source_id: str, index: int)
+    output: Any  # raw JSON; note the payload key on the wire is "utxo"
 ```
 
 ### `get_delegations`
@@ -292,7 +292,7 @@ Returns staking pools with optional pagination. The `sort` field accepts:
 class PoolListOpts:
     offset: int = 0
     items: int = 0
-    sort: str = ""    # omitted from the query when empty (zero-omission rule)
+    sort: str = ""  # omitted from the query when empty (zero-omission rule)
 ```
 
 ```python
@@ -397,10 +397,10 @@ class TokenInfo:
     token_ticker: str
     metadata_uri: str
     number_of_decimals: int
-    total_supply: Any            # raw JSON
+    total_supply: Any  # raw JSON
     frozen: bool
-    is_token_unfreezable: bool | None   # non-None only when frozen
-    is_token_freezable: bool | None     # non-None only when not frozen
+    is_token_unfreezable: bool | None  # non-None only when frozen
+    is_token_freezable: bool | None  # non-None only when not frozen
     next_nonce: int
 ```
 
@@ -458,10 +458,10 @@ Returns a single order by its bech32m order ID.
 class Order:
     order_id: str
     conclude_destination: str
-    give_currency: Any          # raw JSON, "type" of "Coin" or "Token"
+    give_currency: Any  # raw JSON, "type" of "Coin" or "Token"
     initially_given: Amount
     give_balance: Amount
-    ask_currency: Any           # raw JSON, "type" of "Coin" or "Token"
+    ask_currency: Any  # raw JSON, "type" of "Coin" or "Token"
     initially_asked: Amount
     ask_balance: Amount
     nonce: int
@@ -522,7 +522,7 @@ queue.
 parameter is omitted entirely and the server default (5 MB) applies.
 
 ```python
-rate = int(c.get_fee_rate(1))   # atoms per KB, top 1 MB of the mempool
+rate = int(c.get_fee_rate(1))  # atoms per KB, top 1 MB of the mempool
 ```
 
 ---

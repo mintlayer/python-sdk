@@ -101,7 +101,9 @@ def resolve_mnemonic(cli_value: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--mnemonic", default="", help="BIP-39 mnemonic; omit to use $MNEMONIC or a hidden prompt"
+        "--mnemonic",
+        default="",
+        help="BIP-39 mnemonic (insecure: visible in ps/shell history); prefer $MNEMONIC or prompt",
     )
     parser.add_argument("--to", required=True, help="recipient bech32m address")
     parser.add_argument("--amount", required=True, help="amount to send in atoms (1 ML = 1e11)")

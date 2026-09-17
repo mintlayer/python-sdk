@@ -8,10 +8,10 @@ from mintlayer.node import Client
 
 c = Client(
     "http://127.0.0.1:3030",
-    username="user",       # optional; Basic Auth applied only when set
-    password="pass",       # optional
-    timeout=10.0,          # optional, seconds (default 30.0)
-    session=None,          # optional requests.Session (client owns it otherwise)
+    username="user",  # optional; Basic Auth applied only when set
+    password="pass",  # optional
+    timeout=10.0,  # optional, seconds (default 30.0)
+    session=None,  # optional requests.Session (client owns it otherwise)
 )
 ```
 
@@ -58,7 +58,7 @@ Returns a summary of the current chain state.
 class ChainstateInfo:
     best_block_height: int
     best_block_id: str
-    best_block_timestamp: Timestamp   # Timestamp(timestamp: int), Unix seconds
+    best_block_timestamp: Timestamp  # Timestamp(timestamp: int), Unix seconds
     median_time: Timestamp
     is_initial_block_download: bool
 ```
@@ -138,10 +138,11 @@ class Outpoint:
     source_id: OutpointSourceID
     index: int
 
+
 @dataclass
 class OutpointSourceID:
-    type: str       # "Transaction" or "BlockReward"
-    content: Any    # {"tx_id": "<hex>"} or {"block_id": "<hex>"}
+    type: str  # "Transaction" or "BlockReward"
+    content: Any  # {"tx_id": "<hex>"} or {"block_id": "<hex>"}
 ```
 
 Build the `content` payloads with the helpers:
@@ -221,8 +222,8 @@ Returns on-chain token metadata (`None` if unknown).
 ```python
 @dataclass
 class TokenInfo:
-    type: str       # "FungibleToken" or "NonFungibleToken"
-    content: Any    # raw decoded JSON
+    type: str  # "FungibleToken" or "NonFungibleToken"
+    content: Any  # raw decoded JSON
 ```
 
 ### `tokens_info`
@@ -250,7 +251,7 @@ class OrderInfo:
     initially_given: Any
     ask_balance: Amount
     give_balance: Amount
-    nonce: int | None   # None for active orders (daemon sends null)
+    nonce: int | None  # None for active orders (daemon sends null)
     is_frozen: bool
 ```
 
@@ -273,8 +274,8 @@ sent; `None` serialises as JSON `null`).
 ```python
 @dataclass(frozen=True)
 class Currency:
-    type: str                # "Coin" or "Token"
-    content: str | None      # bech32 token ID when type is "Token"
+    type: str  # "Coin" or "Token"
+    content: str | None  # bech32 token ID when type is "Token"
 ```
 
 Construct with the helpers:
@@ -325,9 +326,7 @@ class MempoolTx:
 ### `mempool_submit_transaction`
 
 ```python
-def mempool_submit_transaction(
-    self, tx_hex: str, trust_policy: TrustPolicy | str
-) -> None: ...
+def mempool_submit_transaction(self, tx_hex: str, trust_policy: TrustPolicy | str) -> None: ...
 ```
 
 Submits a transaction to the local mempool only, without broadcasting to peers.
@@ -358,7 +357,7 @@ mempool.
 ```python
 @dataclass(frozen=True)
 class FeeRate:
-    amount_per_kb: Amount   # atoms per kilobyte
+    amount_per_kb: Amount  # atoms per kilobyte
 ```
 
 ### `get_fee_rate_points`
@@ -477,7 +476,7 @@ Wire quirk: each entry is a two-element array
 @dataclass(frozen=True)
 class BannedPeer:
     address: str
-    ban_time: tuple[int, int]   # (seconds, nanoseconds)
+    ban_time: tuple[int, int]  # (seconds, nanoseconds)
 ```
 
 ### `ban`
@@ -506,9 +505,7 @@ Removes a peer from the ban list.
 ### `p2p_submit_transaction`
 
 ```python
-def p2p_submit_transaction(
-    self, tx_hex: str, trust_policy: TrustPolicy | str
-) -> None: ...
+def p2p_submit_transaction(self, tx_hex: str, trust_policy: TrustPolicy | str) -> None: ...
 ```
 
 Submits a transaction to the mempool and broadcasts it to peers. This is the

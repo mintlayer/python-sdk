@@ -22,7 +22,7 @@ When issuing a token you choose one of three supply policies
 For a `Fixed` cap, set the `content` field to an `Amount`:
 
 ```python
-TokenSupply(type="Fixed", content=Amount(atoms="1000000"))   # hard cap
+TokenSupply(type="Fixed", content=Amount(atoms="1000000"))  # hard cap
 ```
 
 `content` is omitted from the wire for the other two policies.
@@ -42,17 +42,19 @@ wc = Client("http://127.0.0.1:3034")
 
 authority_addr = wc.new_address(0)
 
-result = wc.issue_token(IssueTokenParams(
-    account=0,
-    destination_address=authority_addr,
-    metadata=TokenMetadata(
-        token_ticker="MYTOKEN",
-        number_of_decimals=2,
-        metadata_uri="https://example.com/token-metadata.json",
-        token_supply=TokenSupply(type="Lockable"),
-        is_freezable=True,
-    ),
-))
+result = wc.issue_token(
+    IssueTokenParams(
+        account=0,
+        destination_address=authority_addr,
+        metadata=TokenMetadata(
+            token_ticker="MYTOKEN",
+            number_of_decimals=2,
+            metadata_uri="https://example.com/token-metadata.json",
+            token_supply=TokenSupply(type="Lockable"),
+            is_freezable=True,
+        ),
+    )
+)
 print(f"token id: {result.token_id}\ntx id:    {result.tx_id}")
 ```
 
@@ -67,12 +69,14 @@ Wait for the issuance transaction to confirm before minting.
 ```python
 from mintlayer.wallet import MintParams
 
-mint_result = wc.mint_tokens(MintParams(
-    account=0,
-    token_id=result.token_id,
-    address=recipient_addr,
-    amount=Amount(atoms="100000"),   # in smallest token units
-))
+mint_result = wc.mint_tokens(
+    MintParams(
+        account=0,
+        token_id=result.token_id,
+        address=recipient_addr,
+        amount=Amount(atoms="100000"),  # in smallest token units
+    )
+)
 print(f"minted tx id: {mint_result.tx_id}")
 ```
 
@@ -84,11 +88,13 @@ burning).
 ```python
 from mintlayer.wallet import UnmintParams
 
-unmint_result = wc.unmint_tokens(UnmintParams(
-    account=0,
-    token_id="ttml1...",
-    amount=Amount(atoms="50000"),
-))
+unmint_result = wc.unmint_tokens(
+    UnmintParams(
+        account=0,
+        token_id="ttml1...",
+        amount=Amount(atoms="50000"),
+    )
+)
 ```
 
 ### Locking supply
@@ -99,10 +105,12 @@ supply. This operation is irreversible.
 ```python
 from mintlayer.wallet import LockSupplyParams
 
-lock_result = wc.lock_token_supply(LockSupplyParams(
-    account_index=0,
-    token_id="ttml1...",
-))
+lock_result = wc.lock_token_supply(
+    LockSupplyParams(
+        account_index=0,
+        token_id="ttml1...",
+    )
+)
 ```
 
 Quirk: the field is `account_index`, not `account` — the daemon route expects
@@ -116,16 +124,20 @@ can unfreeze later.
 ```python
 from mintlayer.wallet import FreezeParams, UnfreezeParams
 
-freeze_result = wc.freeze_token(FreezeParams(
-    account=0,
-    token_id="ttml1...",
-    is_unfreezable=True,
-))
+freeze_result = wc.freeze_token(
+    FreezeParams(
+        account=0,
+        token_id="ttml1...",
+        is_unfreezable=True,
+    )
+)
 
-unfreeze_result = wc.unfreeze_token(UnfreezeParams(
-    account=0,
-    token_id="ttml1...",
-))
+unfreeze_result = wc.unfreeze_token(
+    UnfreezeParams(
+        account=0,
+        token_id="ttml1...",
+    )
+)
 ```
 
 ### Transferring authority
@@ -133,11 +145,13 @@ unfreeze_result = wc.unfreeze_token(UnfreezeParams(
 ```python
 from mintlayer.wallet import ChangeAuthorityParams
 
-change_result = wc.change_token_authority(ChangeAuthorityParams(
-    account=0,
-    token_id="ttml1...",
-    address=new_authority_addr,
-))
+change_result = wc.change_token_authority(
+    ChangeAuthorityParams(
+        account=0,
+        token_id="ttml1...",
+        address=new_authority_addr,
+    )
+)
 ```
 
 ### Sending tokens
@@ -145,12 +159,14 @@ change_result = wc.change_token_authority(ChangeAuthorityParams(
 ```python
 from mintlayer.wallet import TokenSendParams
 
-send_result = wc.send_token(TokenSendParams(
-    account=0,
-    token_id="ttml1...",
-    address=recipient_addr,
-    amount=Amount(atoms="10000"),
-))
+send_result = wc.send_token(
+    TokenSendParams(
+        account=0,
+        token_id="ttml1...",
+        address=recipient_addr,
+        amount=Amount(atoms="10000"),
+    )
+)
 ```
 
 `send_token` is an alias of `token_send` on the transactions mixin — both call
@@ -169,19 +185,21 @@ from mintlayer.wallet import IssueNFTParams, NFTMetadata
 
 owner_addr = wc.new_address(0)
 
-result = wc.issue_nft(IssueNFTParams(
-    account=0,
-    destination_address=owner_addr,
-    metadata=NFTMetadata(
-        name="My NFT",
-        description="A unique digital collectible",
-        ticker="MYNFT",
-        media_hash="sha256hexhash...",
-        media_uri="https://example.com/media.png",
-        icon_uri="https://example.com/icon.png",
-        # creator and additional_metadata_uri default to None
-    ),
-))
+result = wc.issue_nft(
+    IssueNFTParams(
+        account=0,
+        destination_address=owner_addr,
+        metadata=NFTMetadata(
+            name="My NFT",
+            description="A unique digital collectible",
+            ticker="MYNFT",
+            media_hash="sha256hexhash...",
+            media_uri="https://example.com/media.png",
+            icon_uri="https://example.com/icon.png",
+            # creator and additional_metadata_uri default to None
+        ),
+    )
+)
 print(f"nft id: {result.token_id}")
 ```
 
@@ -243,9 +261,9 @@ try:
         authority_addr,
         "MYTOKEN",
         "https://example.com/metadata.json",
-        2,                              # decimals
+        2,  # decimals
         TotalSupply.LOCKABLE,
-        None,                           # supply_amount: only required for TotalSupply.FIXED
+        None,  # supply_amount: only required for TotalSupply.FIXED
         FreezableToken.YES,
         tip.block_height,
         Network.MAINNET,
@@ -263,7 +281,7 @@ issue_output = c.encode_output_issue_fungible_token(
     "https://example.com/metadata.json",
     2,
     TotalSupply.FIXED,
-    Amount.from_atoms("1000000"),   # required exactly for TotalSupply.FIXED
+    Amount.from_atoms("1000000"),  # required exactly for TotalSupply.FIXED
     FreezableToken.NO,
     tip.block_height,
     Network.MAINNET,
@@ -277,13 +295,13 @@ UTXO.
 
 ```python
 issue_nft_output = c.encode_output_issue_nft(
-    token_id=token_id_str,          # derived with get_token_id (same scheme as FTs)
+    token_id=token_id_str,  # derived with get_token_id (same scheme as FTs)
     authority=owner_addr,
     name="My NFT",
     ticker="MYNFT",
     description="A unique digital collectible",
-    media_hash=bytes.fromhex("..."),   # 32-byte sha256 of the media
-    creator=bytes.fromhex("..."),      # or None
+    media_hash=bytes.fromhex("..."),  # 32-byte sha256 of the media
+    creator=bytes.fromhex("..."),  # or None
     media_uri="https://example.com/media.png",
     icon_uri=None,
     additional_metadata_uri=None,
@@ -320,7 +338,7 @@ from mintlayer.wasm import TokenUnfreezable
 
 freeze_input = c.encode_input_for_freeze_token(
     token_id_str,
-    TokenUnfreezable.YES,   # can be unfrozen later
+    TokenUnfreezable.YES,  # can be unfrozen later
     token_info.next_nonce,
     Network.MAINNET,
 )
@@ -340,9 +358,9 @@ before building transactions:
 tip = idx.get_tip()
 
 issuance_fee = c.fungible_token_issuance_fee(tip.block_height, Network.MAINNET)
-nft_fee      = c.nft_issuance_fee(tip.block_height, Network.MAINNET)
-mint_fee     = c.token_supply_change_fee(tip.block_height, Network.MAINNET)
-freeze_fee   = c.token_freeze_fee(tip.block_height, Network.MAINNET)
+nft_fee = c.nft_issuance_fee(tip.block_height, Network.MAINNET)
+mint_fee = c.token_supply_change_fee(tip.block_height, Network.MAINNET)
+freeze_fee = c.token_freeze_fee(tip.block_height, Network.MAINNET)
 authority_fee = c.token_change_authority_fee(tip.block_height, Network.MAINNET)
 ```
 

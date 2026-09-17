@@ -98,7 +98,7 @@ for u in utxos:
 from mintlayer.wasm import Amount
 
 output = c.encode_output_transfer(
-    Amount(atoms="100000000000"),   # 1 ML in atoms
+    Amount(atoms="100000000000"),  # 1 ML in atoms
     "mtc1qrecipient...",
     Network.MAINNET,
 )
@@ -109,7 +109,7 @@ For multiple outputs, concatenate them:
 ```python
 change_output = c.encode_output_transfer(
     Amount(atoms=str(change_atoms)),
-    from_addr,   # send change back to sender
+    from_addr,  # send change back to sender
     Network.MAINNET,
 )
 
@@ -121,7 +121,7 @@ all_outputs = output + change_output
 ## Step 5: Build the unsigned transaction
 
 ```python
-tx = c.encode_transaction(encoded_inputs, output, 0)   # flags = 0
+tx = c.encode_transaction(encoded_inputs, output, 0)  # flags = 0
 
 tx_id = c.get_transaction_id(tx, True)
 print(f"unsigned tx id: {tx_id}")
@@ -180,9 +180,9 @@ for i in range(len(utxos)):
         from_addr,
         tx,
         all_utxo_bytes,
-        i,                    # input index
-        TxAdditionalInfo(),   # empty for standard transfers
-        0,                    # block height (0 when no timelock constraint)
+        i,  # input index
+        TxAdditionalInfo(),  # empty for standard transfers
+        0,  # block height (0 when no timelock constraint)
         Network.MAINNET,
     )
     witness_bytes += w
@@ -256,7 +256,7 @@ Sending fungible tokens uses the same flow, with a different output encoder:
 
 ```python
 token_output = c.encode_output_token_transfer(
-    Amount(atoms="1000"),   # token amount in smallest units
+    Amount(atoms="1000"),  # token amount in smallest units
     "mtc1qrecipient...",
     "ttml1tokenid...",
     Network.MAINNET,

@@ -202,6 +202,8 @@ class _WasmCore:
         ret = self._call(name, *params)
         if len(ret) >= 3 and ret[2] != 0:
             raise self._extract_error(ret[1])
+        if len(ret) < 1:
+            raise WasmError(f"mintlayer: unexpected return count from {name}")
         return ret[0] != 0
 
     def _call_return_u32(self, name: str, *params: Any) -> int:
@@ -209,6 +211,8 @@ class _WasmCore:
         ret = self._call(name, *params)
         if len(ret) >= 3 and ret[2] != 0:
             raise self._extract_error(ret[1])
+        if len(ret) < 1:
+            raise WasmError(f"mintlayer: unexpected return count from {name}")
         return ret[0] & 0xFFFFFFFF
 
     def _call_return_u64(self, name: str, *params: Any) -> int:
@@ -216,6 +220,8 @@ class _WasmCore:
         ret = self._call(name, *params)
         if len(ret) >= 3 and ret[2] != 0:
             raise self._extract_error(ret[1])
+        if len(ret) < 1:
+            raise WasmError(f"mintlayer: unexpected return count from {name}")
         return ret[0] & 0xFFFFFFFFFFFFFFFF
 
     def _call_return_amount(self, name: str, *params: Any) -> Amount:

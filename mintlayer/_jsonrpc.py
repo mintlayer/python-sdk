@@ -101,6 +101,8 @@ class JSONRPCClient:
             raise JSONRPCError("decode response: unexpected JSON-RPC response shape")
         error = body.get("error")
         if error is not None:
+            if not isinstance(error, dict):
+                raise JSONRPCError("decode response: JSON-RPC error object has unexpected shape")
             raise RPCError(error.get("code", 0), error.get("message", ""))
         return body.get("result")
 
