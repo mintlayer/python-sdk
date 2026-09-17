@@ -108,6 +108,12 @@ class SimpleCurrencyAmount:
     kind: CurrencyAmountKind = CurrencyAmountKind.COINS
     token_id: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.kind == CurrencyAmountKind.TOKENS and not self.token_id:
+            raise ValueError("token_id is required for TOKENS amounts")
+        if self.kind == CurrencyAmountKind.COINS and self.token_id is not None:
+            raise ValueError("token_id must be None for COINS amounts")
+
     @classmethod
     def coins(cls, atoms: str) -> SimpleCurrencyAmount:
         return cls(atoms=atoms, kind=CurrencyAmountKind.COINS, token_id=None)

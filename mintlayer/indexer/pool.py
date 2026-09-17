@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from ._http import IndexerHTTP, _seg
+from ._http import IndexerError, IndexerHTTP, _seg
 from .types import Pool, PoolDelegation, PoolListOpts
 
 
@@ -24,7 +24,14 @@ class PoolMixin(IndexerHTTP):
             f"/pool/{_seg(pool_id)}/block-stats",
             {"from": int(from_time.timestamp()), "to": int(to_time.timestamp())},
         )
-        return int(data["block_count"])
+        if not isinstance(data, dict) or "block_count" not in data:
+            raise IndexerError(f"get_pool_block_stats: unexpected response {data!r}")
+        try:
+            return int(data["block_count"])
+        except (TypeError, ValueError) as exc:
+            raise IndexerError(
+                f"get_pool_block_stats: invalid block_count {data['block_count']!r}"
+            ) from exc
 
     def get_pool_delegations(self, pool_id: str) -> list[PoolDelegation]:
         """Return the delegations to a pool."""

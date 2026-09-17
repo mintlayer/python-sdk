@@ -20,4 +20,8 @@ class _WalletCore(BaseJSONRPCClient):
 
     def _call_model_list(self, method: str, params: Any, cls: type[_T]) -> list[_T]:
         data = self._rpc.call(method, params)
-        return [cls.from_json(item) for item in data or []]  # type: ignore[attr-defined]
+        if data is None:
+            return []  # JSON null == empty list (matches Go's nil-slice decode)
+        if not isinstance(data, list):
+            raise JSONRPCError(f"{method}: expected list result, got {data!r}")
+        return [cls.from_json(item) for item in data]  # type: ignore[attr-defined]

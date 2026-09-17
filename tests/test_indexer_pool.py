@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from mintlayer.indexer import Client, Pool, PoolDelegation, PoolListOpts
+from mintlayer.indexer import Client, IndexerError, Pool, PoolDelegation, PoolListOpts
 
 
 def _pool_payload(**margin_overrides: object) -> dict:
@@ -115,6 +115,25 @@ def test_get_pool_block_stats_query_params(rest_server) -> None:
     client.get_pool_block_stats("mpool1abc", _FROM, _TO)
     assert "from=1700000000" in srv.capture.query
     assert "to=1700086400" in srv.capture.query
+    client.close()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"nope": 1}, id="missing-block-count"),
+        pytest.param(["nope"], id="list"),
+        pytest.param("astring", id="bare-string"),
+    ],
+)
+def test_get_pool_block_stats_malformed_payload_raises_indexer_error(
+    rest_server, payload: object
+) -> None:
+    """Non-dict payloads and dicts without block_count raise IndexerError."""
+    srv = rest_server(payload=payload)
+    client = Client(srv.url)
+    with pytest.raises(IndexerError, match="get_pool_block_stats: unexpected response"):
+        client.get_pool_block_stats("mpool1abc", _FROM, _TO)
     client.close()
 
 

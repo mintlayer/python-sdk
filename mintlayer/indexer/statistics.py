@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ._http import IndexerHTTP
+from ._http import IndexerHTTP, _seg
 from .types import CoinStats
 
 
@@ -13,7 +13,7 @@ class StatisticsMixin(IndexerHTTP):
 
     def get_token_statistics(self, token_id: str) -> CoinStats:
         """Return the same statistics for a token."""
-        return CoinStats.from_json(self.get(f"/statistics/token/{token_id}"))
+        return CoinStats.from_json(self.get(f"/statistics/token/{_seg(token_id)}"))
 
     def get_fee_rate(self, in_top_x_mb: int = 0) -> str:
         """Return the fee rate (atoms per KB) as a decimal string.

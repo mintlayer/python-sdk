@@ -51,7 +51,7 @@ class StakingMixin(_WalletCore):
     def get_staking_status(self, account: int) -> StakingStatus:
         """Return whether the account is currently staking."""
         result = self._call("staking_status", {"account": account})
-        return StakingStatus(str(result))
+        return StakingStatus(result)
 
     def create_delegation(self, params: CreateDelegationParams) -> CreateDelegationResult:
         """Create a delegation ID for delegating to a pool."""

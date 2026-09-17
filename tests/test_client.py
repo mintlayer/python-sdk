@@ -100,6 +100,62 @@ class TestWasmLifecycle:
             _ = client.wasm
 
 
+class TestConfigRedaction:
+    def test_repr_redacts_password(self) -> None:
+        got = repr(
+            Config(
+                node_url="http://127.0.0.1:3030",
+                indexer_url="http://127.0.0.1:3000",
+                wallet_url="http://127.0.0.1:3034",
+                username="alice",
+                password="hunter2",
+                timeout=5.0,
+            )
+        )
+        assert "password='***'" in got
+        assert "hunter2" not in got
+        # The non-secret fields stay visible for debugging.
+        assert "node_url='http://127.0.0.1:3030'" in got
+        assert "indexer_url='http://127.0.0.1:3000'" in got
+        assert "wallet_url='http://127.0.0.1:3034'" in got
+        assert "username='alice'" in got
+        assert "timeout=5.0" in got
+
+    def test_password_field_has_repr_disabled(self) -> None:
+        """The dataclass field itself is marked repr=False (belt to the braces)."""
+        assert Config.__dataclass_fields__["password"].repr is False
+
+
+class TestCloseClosesSubClients:
+    def test_close_closes_each_sub_clients_session(
+        self, rpc_server, rest_server, monkeypatch
+    ) -> None:
+        """Top-level close() must reach the HTTP session each sub-client owns."""
+        node_srv = rpc_server(result=_BLOCK_RESULT)
+        indexer_srv = rest_server(payload={})
+        wallet_srv = rpc_server(result=None)
+        client = Client(
+            Config(
+                node_url=node_srv.url,
+                indexer_url=indexer_srv.url,
+                wallet_url=wallet_srv.url,
+            )
+        )
+        closed: list[str] = []
+        monkeypatch.setattr(client.node._rpc._session, "close", lambda: closed.append("node"))
+        monkeypatch.setattr(client.indexer._session, "close", lambda: closed.append("indexer"))
+        monkeypatch.setattr(client.wallet._rpc._session, "close", lambda: closed.append("wallet"))
+        client.close()
+        # Node, indexer and wallet are all released, in construction order.
+        assert closed == ["node", "indexer", "wallet"]
+
+    def test_close_is_idempotent_with_sub_clients(self, rpc_server) -> None:
+        """A second close() with real sub-clients must not raise."""
+        client = Client(Config(node_url=rpc_server(result=_BLOCK_RESULT).url))
+        client.close()
+        client.close()
+
+
 class TestContextManager:
     def test_with_block_and_idempotent_close(self) -> None:
         with mintlayer.Client(mintlayer.Config(node_url="http://127.0.0.1:3030")) as c:

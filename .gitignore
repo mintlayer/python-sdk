@@ -8,13 +8,13 @@ build/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-.coverage
 htmlcov/
 .wrangler/
 uv.lock
 
 # secrets
 .env*
+!.env.example
 *.pem
 *.key
 *.seed

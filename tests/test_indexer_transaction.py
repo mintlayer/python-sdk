@@ -6,7 +6,9 @@ including pagination, zero-value PageOpts, and the text/plain submit route.
 
 from __future__ import annotations
 
-from mintlayer.indexer import Client, MerklePath, PageOpts, Transaction
+import pytest
+
+from mintlayer.indexer import Client, IndexerError, MerklePath, PageOpts, Transaction
 
 
 def test_list_transactions_pagination(rest_server) -> None:
@@ -126,3 +128,23 @@ def test_submit_transaction(rest_server) -> None:
     assert srv.capture.raw_body == b"cafebabe"
     assert srv.capture.headers.get("content-type", "").startswith("text/plain")
     client.close()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"nope": 1}, id="missing-tx-id"),
+        pytest.param("astring", id="bare-string"),
+    ],
+)
+def test_submit_transaction_malformed_payload_raises_indexer_error(
+    rest_server, payload: object
+) -> None:
+    """A response without a tx_id is a codec failure, not KeyError/TypeError."""
+    srv = rest_server(payload=payload)
+    client = Client(srv.url)
+    try:
+        with pytest.raises(IndexerError):
+            client.submit_transaction("cafebabe")
+    finally:
+        client.close()

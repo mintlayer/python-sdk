@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import time
 
 from mintlayer.wallet import (
     Amount,
@@ -60,7 +61,14 @@ def main() -> None:
     parser.add_argument("--supply", default="1000000", help="initial mint supply in smallest unit")
     parser.add_argument("--uri", default="", help="URL pointing to token metadata JSON")
     parser.add_argument("--wallet-rpc", default="http://127.0.0.1:3034", help="wallet RPC endpoint")
+    parser.add_argument("--indexer", default="http://127.0.0.1:3000", help="indexer base URL")
     parser.add_argument("--account", type=int, default=0, help="wallet account index")
+    parser.add_argument(
+        "--wait-timeout",
+        type=int,
+        default=300,
+        help="max seconds to wait for issuance confirmation",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -135,8 +143,31 @@ def main() -> None:
     # MintTokens creates new tokens and sends them to the given address.
     # The wallet must control the authority key.
     #
-    # Note: wait for the issuance transaction to confirm before minting.
-    # In production, poll indexer.get_transaction until confirmations != "".
+    # Minting requires the issuance transaction to be confirmed first, so poll
+    # the indexer until it is (bounded by --wait-timeout).
+    from mintlayer.indexer import Client as IndexerClient
+    from mintlayer.indexer import HTTPError
+
+    indexer = IndexerClient(args.indexer)
+    deadline = time.monotonic() + args.wait_timeout
+    while True:
+        try:
+            info = indexer.get_transaction(issue_result.tx_id)
+        except HTTPError:
+            info = None  # not indexed yet — keep polling
+        if info and info.confirmations:
+            log.info("issuance confirmed (%s confirmations)", info.confirmations)
+            break
+        if time.monotonic() >= deadline:
+            log.warning(
+                "issuance tx %s not confirmed within %ds; skipping mint (re-run once it confirms)",
+                issue_result.tx_id,
+                args.wait_timeout,
+            )
+            return
+        log.info("waiting for issuance tx %s to confirm...", issue_result.tx_id)
+        time.sleep(5)
+
     try:
         mint_result = wallet.mint_tokens(
             MintParams(

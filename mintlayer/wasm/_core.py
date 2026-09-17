@@ -130,9 +130,11 @@ class _WasmCore:
             res = fn(self.store, *params)
         except Exception as exc:
             # WasmThrow (from the host's __wbindgen_throw) and traps land here.
+            # The cause chain is preserved: wasmtime trap traces are noisy but
+            # invaluable for diagnosing memory/ABI failures.
             if self.call_state.err_msg:
-                raise WasmError(f"mintlayer: {self.call_state.err_msg}") from None
-            raise WasmError(f"mintlayer: call {name}: {exc}") from None
+                raise WasmError(f"mintlayer: {self.call_state.err_msg}") from exc
+            raise WasmError(f"mintlayer: call {name}: {exc}") from exc
         self._last_err_msg = self.call_state.err_msg
         self._last_json = self.call_state.last_json
         # Func.__call__ returns None / scalar / list depending on result count.
@@ -157,9 +159,7 @@ class _WasmCore:
         if len(ret) < 2:
             raise WasmError(f"mintlayer: unexpected return count from {name}")
         ptr, length = ret[0], ret[1]
-        if length == 0:
-            return b""
-        data = self._read_bytes(ptr, length)
+        data = self._read_bytes(ptr, length) if length else bytearray()
         if data is None:
             raise WasmError("mintlayer: memory read failed")
         with contextlib.suppress(Exception):
@@ -173,9 +173,7 @@ class _WasmCore:
         if len(ret) < 2:
             raise WasmError(f"mintlayer: unexpected return count from {name}")
         ptr, length = ret[0], ret[1]
-        if length == 0:
-            return b""
-        data = self._read_bytes(ptr, length)
+        data = self._read_bytes(ptr, length) if length else bytearray()
         if data is None:
             raise WasmError("mintlayer: memory read failed")
         with contextlib.suppress(Exception):

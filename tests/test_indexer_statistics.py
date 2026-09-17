@@ -39,6 +39,20 @@ def test_get_token_statistics(rest_server) -> None:
     client.close()
 
 
+def test_get_token_statistics_percent_encodes_reserved_characters(rest_server) -> None:
+    """A token id containing '/' or '?' must be percent-encoded in the path."""
+    srv = rest_server(payload=_COIN_STATS)
+    client = Client(srv.url)
+    try:
+        stats = client.get_token_statistics("tok/en?x")
+        assert isinstance(stats, CoinStats)
+        assert srv.capture.path == "/api/v2/statistics/token/tok%2Fen%3Fx"
+        # Nothing may leak out of the path into the query string.
+        assert srv.capture.query == ""
+    finally:
+        client.close()
+
+
 def test_get_fee_rate_in_top_x_mb(rest_server) -> None:
     """in_top_x_mb=5 is sent and the bare JSON string result is returned."""
     srv = rest_server(payload="1000")

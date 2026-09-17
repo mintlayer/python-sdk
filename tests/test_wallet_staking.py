@@ -7,6 +7,8 @@ string -> enum mapping of the staking status.
 
 from __future__ import annotations
 
+import pytest
+
 from mintlayer.wallet import (
     Amount,
     Client,
@@ -16,6 +18,7 @@ from mintlayer.wallet import (
     DecommissionParams,
     DelegateParams,
     DelegationInfo,
+    JSONRPCError,
     OwnedPool,
     StakingStatus,
     WithdrawParams,
@@ -110,6 +113,22 @@ def test_list_owned_pools_null_result_returns_empty(rpc_server) -> None:
     srv = rpc_server(result=None)
     client = Client(srv.url)
     assert client.list_owned_pools(0) == []
+    client.close()
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        pytest.param({"pool_id": "pool1abc"}, id="dict"),
+        pytest.param("astring", id="bare-string"),
+    ],
+)
+def test_list_owned_pools_non_list_result_raises_jsonrpc_error(rpc_server, result: object) -> None:
+    """A non-list, non-null result is a protocol error, not a decode crash."""
+    srv = rpc_server(result=result)
+    client = Client(srv.url)
+    with pytest.raises(JSONRPCError, match="staking_list_pools: expected list result"):
+        client.list_owned_pools(0)
     client.close()
 
 

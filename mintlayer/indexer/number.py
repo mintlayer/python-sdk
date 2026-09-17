@@ -50,7 +50,7 @@ def parse_per_thousand(data: Any) -> float:
         except ValueError as exc:
             raise IndexerError(f"PerThousand: {exc}") from exc
     else:
-        value = float(data)
+        raise IndexerError(f"PerThousand: invalid value {data!r}")
     if not math.isfinite(value):
         raise IndexerError(f"PerThousand: non-finite value {data!r}")
     return value

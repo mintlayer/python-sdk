@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._http import IndexerHTTP, _seg
+from ._http import IndexerError, IndexerHTTP, _seg
 from .types import MerklePath, PageOpts, Transaction
 
 
@@ -29,4 +29,6 @@ class TransactionMixin(IndexerHTTP):
     def submit_transaction(self, signed_tx_hex: str) -> str:
         """Submit a signed transaction (hex) — requires ``--enable-post-routes``."""
         data = self.post_text("/transaction", signed_tx_hex)
+        if not isinstance(data, dict) or "tx_id" not in data:
+            raise IndexerError(f"submit_transaction: unexpected response {data!r}")
         return str(data["tx_id"])

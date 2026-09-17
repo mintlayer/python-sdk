@@ -96,7 +96,15 @@ def register_host_functions(client: _WasmCore, linker: Linker) -> None:
         return idx
 
     def signal_exception(msg: str) -> None:
-        """Mirror JS ``handleError``: stash the exception so WASM returns Err."""
+        """Mirror JS ``handleError``: stash the exception so WASM returns Err.
+
+        The message is recorded in the per-call side channel so host-side
+        failures surface even if the WASM error path never calls
+        ``__wbindgen_cast_...2`` (a later cast still overwrites it with the
+        richer Rust-side message).
+        """
+        if not state.err_msg:
+            state.err_msg = msg
         if client.get_export("__externref_table_alloc") is None:
             return
         if client.get_export("__wbindgen_exn_store") is None:
@@ -219,7 +227,12 @@ def register_host_functions(client: _WasmCore, linker: Linker) -> None:
                 client.memory.write(store, data, dst_ptr)
 
     def _subarray(value: Any, start: int, end: int) -> Any:
+        # JS spec: TypedArray.prototype.subarray clamps the range silently.
+        # (Divergence: JS also accepts negative indices as from-the-end; this
+        # host clamps them to 0 — wasm-bindgen only ever passes u32 offsets.)
         if isinstance(value, Uint8ArrayRef):
+            start = max(0, min(start, value.length))
+            end = max(start, min(end, value.length))
             return Uint8ArrayRef(value.ptr + start, end - start)
         return None
 

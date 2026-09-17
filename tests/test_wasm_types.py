@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from mintlayer.wasm import (
     Amount,
     CurrencyAmountKind,
@@ -67,6 +69,27 @@ def test_simple_currency_amount_tokens_shape() -> None:
     tokens = SimpleCurrencyAmount.tokens("7", "mmltk1abc")
     assert tokens.kind == CurrencyAmountKind.TOKENS
     assert tokens.to_json_value() == {"tokens": {"amount": {"atoms": "7"}, "token_id": "mmltk1abc"}}
+
+
+def test_simple_currency_amount_tokens_without_token_id_rejected() -> None:
+    """A TOKENS amount without a token_id cannot be constructed."""
+    with pytest.raises(ValueError, match="token_id is required for TOKENS amounts"):
+        SimpleCurrencyAmount(atoms="1", kind=CurrencyAmountKind.TOKENS)
+
+
+def test_simple_currency_amount_coins_with_token_id_rejected() -> None:
+    """A COINS amount must not carry a token_id."""
+    with pytest.raises(ValueError, match="token_id must be None for COINS amounts"):
+        SimpleCurrencyAmount(atoms="1", token_id="mmltk1abc")
+
+
+def test_simple_currency_amount_valid_constructions_still_work() -> None:
+    """The invariant only rejects the two contradictory combinations."""
+    coins = SimpleCurrencyAmount(atoms="1")
+    assert coins.kind == CurrencyAmountKind.COINS
+    assert coins.token_id is None
+    tokens = SimpleCurrencyAmount(atoms="1", kind=CurrencyAmountKind.TOKENS, token_id="mmltk1abc")
+    assert tokens.to_json_value() == {"tokens": {"amount": {"atoms": "1"}, "token_id": "mmltk1abc"}}
 
 
 def test_order_balance_redundant_shape() -> None:

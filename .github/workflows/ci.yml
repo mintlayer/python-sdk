@@ -105,7 +105,9 @@ jobs:
         run: |
           python3 - <<'EOF'
           import zipfile, glob
-          wheel = glob.glob("dist/*.whl")[0]
+          wheels = glob.glob("dist/*.whl")
+          assert wheels, "no wheel produced by uv build"
+          wheel = wheels[0]
           names = zipfile.ZipFile(wheel).namelist()
           assert any(n.endswith("wasm_wrappers_bg.wasm") for n in names), "wasm binary missing"
           assert any(n.endswith("wasm_wrappers_bg.wasm.sha256") for n in names), "sha256 pin missing"

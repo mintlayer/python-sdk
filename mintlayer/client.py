@@ -8,7 +8,7 @@ common types so callers importing just ``mintlayer`` get the full surface.
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .indexer import Client as IndexerClient
 from .node import Client as NodeClient
@@ -79,14 +79,22 @@ class Config:
     """Top-level SDK configuration.
 
     Only sub-clients whose URL field is non-empty are constructed.
+    ``password`` is redacted from :func:`repr` to keep credentials out of logs.
     """
 
     node_url: str = ""
     indexer_url: str = ""
     wallet_url: str = ""
     username: str = ""
-    password: str = ""
+    password: str = field(default="", repr=False)
     timeout: float = 30.0
+
+    def __repr__(self) -> str:
+        return (
+            f"Config(node_url={self.node_url!r}, indexer_url={self.indexer_url!r}, "
+            f"wallet_url={self.wallet_url!r}, username={self.username!r}, "
+            f"password='***', timeout={self.timeout!r})"
+        )
 
 
 class Client:
@@ -140,8 +148,14 @@ class Client:
         return self._wasm
 
     def close(self) -> None:
-        """Release WASM resources; HTTP sub-clients need no teardown."""
+        """Release WASM resources and close sessions owned by sub-clients."""
         with self._mu:
+            if self.node is not None:
+                self.node.close()
+            if self.indexer is not None:
+                self.indexer.close()
+            if self.wallet is not None:
+                self.wallet.close()
             if self._wasm is not None:
                 self._wasm.close()
                 self._wasm = None
