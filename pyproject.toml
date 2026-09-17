@@ -32,6 +32,7 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
     "mypy>=1.11",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -58,3 +59,11 @@ check_untyped_defs = true
 [[tool.mypy.overrides]]
 module = "wasmtime.*"
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["mintlayer"]
+omit = ["mintlayer/wasm/wasm_wrappers_bg.wasm"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 1
