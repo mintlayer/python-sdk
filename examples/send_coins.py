@@ -181,22 +181,26 @@ def main() -> None:
         if change > 0:
             outputs += wasm.encode_output_transfer(Amount(atoms=str(change)), from_addr, network)
         tx = wasm.encode_transaction(encoded_inputs, outputs, 0)
-        size = wasm.estimate_transaction_size(tx, [from_addr] * len(utxos), outputs, network)
+        # The size estimate needs the encoded INPUTS blob (one address per input).
+        size = wasm.estimate_transaction_size(
+            encoded_inputs, [from_addr] * len(utxos), outputs, network
+        )
         return tx, size
 
     # The fee depends on the tx size, which depends on the change amount's
-    # digit count; the loop converges in a couple of passes.
+    # digit count; the loop converges in a couple of passes. A change of zero
+    # (exact sweep) simply omits the change output.
     fee = fee_rate  # start from 1 KB worth of fees
-    tx, size = build(fee)
-    for _ in range(4):
-        new_fee = max(1, -(-size // 1000) * fee_rate)  # ceil(size / 1000) * rate
-        if new_fee == fee:
-            break
-        fee = new_fee
+    try:
         tx, size = build(fee)
-
-    if total - send_amt - fee <= 0:
-        log.fatal("balance %d cannot cover amount %d plus fee %d", total, send_amt, fee)
+        for _ in range(4):
+            new_fee = max(1, -(-size // 1000) * fee_rate)  # ceil(size / 1000) * rate
+            if new_fee == fee:
+                break
+            fee = new_fee
+            tx, size = build(fee)
+    except ValueError as exc:
+        log.fatal("%s", exc)
         sys.exit(1)
 
     tx_id = wasm.get_transaction_id(tx, True)

@@ -165,7 +165,8 @@ def main() -> None:
             info = indexer.get_transaction(issue_result.tx_id)
         except HTTPError:
             info = None  # not indexed yet — keep polling
-        if info and info.confirmations:
+        # confirmations is a string; treat "" and "0" as unconfirmed.
+        if info and info.confirmations not in ("", "0"):
             log.info("issuance confirmed (%s confirmations)", info.confirmations)
             break
         if time.monotonic() >= deadline:
