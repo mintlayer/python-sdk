@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from mintlayer._jsonrpc import JSONRPCError
+
 from ._core import _WalletCore
 from .types import (
     Amount,
@@ -51,7 +53,13 @@ class StakingMixin(_WalletCore):
     def get_staking_status(self, account: int) -> StakingStatus:
         """Return whether the account is currently staking."""
         result = self._call("staking_status", {"account": account})
-        return StakingStatus(result)
+        try:
+            return StakingStatus(result)
+        except ValueError as exc:
+            raise JSONRPCError(
+                f"staking_status: unexpected status {result!r} "
+                f"(expected one of {[m.value for m in StakingStatus]})"
+            ) from exc
 
     def create_delegation(self, params: CreateDelegationParams) -> CreateDelegationResult:
         """Create a delegation ID for delegating to a pool."""

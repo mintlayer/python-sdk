@@ -178,6 +178,22 @@ def test_get_staking_status_inactive(rpc_server) -> None:
     client.close()
 
 
+def test_get_staking_status_unrecognized_raises_jsonrpc_error(rpc_server) -> None:
+    """An unrecognized status string raises the documented JSONRPCError
+    contract — including the offending value and every valid enum value —
+    not a bare ValueError from the enum constructor.
+    """
+    srv = rpc_server(result="MAYBE")
+    client = Client(srv.url)
+    with pytest.raises(JSONRPCError, match="unexpected status") as excinfo:
+        client.get_staking_status(0)
+    message = str(excinfo.value)
+    assert "'MAYBE'" in message
+    for member in StakingStatus:
+        assert member.value in message
+    client.close()
+
+
 def test_create_delegation(rpc_server) -> None:
     srv = rpc_server(result={"delegation_id": "deleg1abc", "tx_id": "delegtx01"})
     client = Client(srv.url)

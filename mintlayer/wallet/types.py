@@ -272,9 +272,19 @@ class MnemonicResult:
     @classmethod
     def from_json(cls, data: dict) -> MnemonicResult:
         content = data.get("content")
+        if content is not None and not isinstance(content, dict):
+            raise ValueError(f"MnemonicResult: invalid content {content!r}")
+        try:
+            # An empty dict is malformed too: the daemon claimed a mnemonic
+            # result without the required `mnemonic` key.
+            decoded = MnemonicContent(**content) if content is not None else None
+        except TypeError as exc:
+            # Unexpected/missing keys in the daemon payload must not surface
+            # as a bare kwargs TypeError.
+            raise ValueError(f"MnemonicContent: malformed payload ({exc})") from exc
         return cls(
             type=data["type"],
-            content=MnemonicContent(**content) if content else None,
+            content=decoded,
         )
 
 

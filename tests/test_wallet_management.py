@@ -18,6 +18,7 @@ from mintlayer.wallet import (
     CreateWalletParams,
     CreateWalletResult,
     JSONRPCError,
+    MnemonicResult,
     RecoverWalletParams,
     WalletInfo,
 )
@@ -55,6 +56,35 @@ def test_create_wallet_without_mnemonic(rpc_server) -> None:
     got = client.create_wallet(CreateWalletParams(path="/tmp/test.db", store_seed_phrase=True))
     assert got == CreateWalletResult(mnemonic=None)
     client.close()
+
+
+# ── MnemonicResult.from_json content validation (direct decode tests) ────────
+
+
+def test_mnemonic_result_from_json_valid_content() -> None:
+    got = MnemonicResult.from_json({"type": "NewlyGenerated", "content": {"mnemonic": _MNEMONIC}})
+    assert got.type == "NewlyGenerated"
+    assert got.content is not None
+    assert got.content.mnemonic == _MNEMONIC
+
+
+def test_mnemonic_result_from_json_null_content() -> None:
+    got = MnemonicResult.from_json({"type": "UserProvided", "content": None})
+    assert got.type == "UserProvided"
+    assert got.content is None
+
+
+def test_mnemonic_result_from_json_non_dict_content_raises() -> None:
+    """A non-dict content raises ValueError, never a str()-coerced field."""
+    with pytest.raises(ValueError, match="invalid content"):
+        MnemonicResult.from_json({"type": "NewlyGenerated", "content": "oops"})  # type: ignore[dict-item]
+
+
+def test_mnemonic_result_from_json_missing_mnemonic_key_raises() -> None:
+    """A payload without the required ``mnemonic`` key raises ValueError
+    ("malformed payload") instead of a bare kwargs TypeError."""
+    with pytest.raises(ValueError, match="malformed payload"):
+        MnemonicResult.from_json({"type": "NewlyGenerated", "content": {"seed": "x"}})
 
 
 def test_create_wallet_wire_shape(rpc_server) -> None:

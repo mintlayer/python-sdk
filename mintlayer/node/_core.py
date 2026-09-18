@@ -35,7 +35,12 @@ class _NodeCore(BaseJSONRPCClient):
 
     def _call_opt_str(self, method: str, params: Any) -> str | None:
         result = self._rpc.call(method, params)
-        return None if result is None else str(result)
+        if result is None:
+            return None
+        if not isinstance(result, str):
+            # Coercing a dict/number to str would return garbage silently.
+            raise JSONRPCError(f"{method}: expected string result, got {result!r}")
+        return result
 
     def _call_int(self, method: str, params: Any) -> int:
         result = self._rpc.call(method, params)

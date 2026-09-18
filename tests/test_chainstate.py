@@ -84,6 +84,19 @@ def test_block_id_at_height_null(rpc_server) -> None:
     client.close()
 
 
+def test_block_id_at_height_non_string_result_raises(rpc_server) -> None:
+    """A non-string, non-null result raises instead of being str()-coerced.
+
+    Coercing a JSON number/dict to str would return garbage silently; the
+    optional-string decoder must surface it as the JSONRPCError contract.
+    """
+    srv = rpc_server(result=123456)
+    client = Client(srv.url)
+    with pytest.raises(JSONRPCError, match="chainstate_block_id_at_height: expected string result"):
+        client.block_id_at_height(7)
+    client.close()
+
+
 def test_stake_pool_balance(rpc_server) -> None:
     srv = rpc_server(result={"atoms": "100000000000"})
     client = Client(srv.url)
