@@ -187,10 +187,11 @@ def main() -> None:
         )
         return tx, size
 
-    # The fee depends on the tx size, which depends on the change amount's
-    # digit count; the loop converges in a couple of passes. A change of zero
-    # (exact sweep) simply omits the change output.
-    fee = fee_rate  # start from 1 KB worth of fees
+    # Start from a zero fee so the first build always succeeds (it only needs
+    # balance >= send_amt); the loop then converges from the size estimate.
+    # Starting from the full 1 KB rate would abort builds that are actually
+    # affordable.
+    fee = 0
     try:
         tx, size = build(fee)
         for _ in range(4):

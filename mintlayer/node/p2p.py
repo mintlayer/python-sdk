@@ -11,6 +11,10 @@ from .types import policy_value as _policy_value
 
 def _duration_to_wire(duration: timedelta) -> list[int]:
     """Split a duration into the daemon's [seconds, nanoseconds] wire form."""
+    if duration.total_seconds() < 0:
+        # Python normalises negative timedeltas into (days=-1, seconds=86399);
+        # encoding that naively would ban for ~364 days instead of -1s.
+        raise ValueError(f"ban duration must not be negative, got {duration!r}")
     secs = duration.days * 86_400 + duration.seconds
     nanos = duration.microseconds * 1_000
     return [secs, nanos]

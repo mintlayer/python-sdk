@@ -20,8 +20,11 @@ on:
 # with an API token stored in the environment secrets. PEP 740 attestations
 # require OIDC trusted publishing; re-enable both if the project migrates
 # to trusted publishing (which would also eliminate the long-lived token).
+# actions:read lets publish-pypi download the dist/ artifact produced by the
+# earlier tag-push run.
 permissions:
   contents: read
+  actions: read
 
 # Never cancel a publish in flight.
 concurrency:
@@ -135,32 +138,31 @@ jobs:
     timeout-minutes: 10
     environment: pypi
     steps:
-      - name: Download distributions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: dist
-          path: dist/
-
-      # The manual gate only means something if PyPI receives the exact bytes
-      # that were verified as the TestPyPI dry-run: refuse to publish unless
-      # every artifact's sha256 matches what TestPyPI has for this version.
-      - name: Verify artifacts match the TestPyPI dry-run
+      # Rebuilds are not guaranteed byte-reproducible (wheel zip timestamps),
+      # so instead of building again we publish the EXACT dist/ artifact that
+      # the tag-push run verified and uploaded to TestPyPI.
+      - name: Locate the tag-push publish run
+        id: tagrun
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python3 - <<'EOF'
-          import hashlib, json, os, pathlib, sys, urllib.request
+          tag="${GITHUB_REF_NAME#refs/tags/}"
+          run_id="$(gh run list -R "$GITHUB_REPOSITORY" --workflow publish.yml --event push \
+            --json databaseId,headBranch,conclusion \
+            --jq ".[] | select(.headBranch == \"$tag\" and .conclusion == \"success\") | .databaseId" | head -1)"
+          if [ -z "$run_id" ]; then
+            echo "::error::no successful tag-push publish run for $tag - push the tag first and let the TestPyPI dry-run finish"
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
 
-          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
-          url = f"https://test.pypi.org/pypi/mintlayer/{version}/json"
-          with urllib.request.urlopen(url, timeout=30) as resp:
-              remote = {u["filename"]: u["digests"]["sha256"] for u in json.load(resp)["urls"]}
-          if not remote:
-              sys.exit(f"version {version} not found on TestPyPI - cut the tag first")
-          for dist in sorted(pathlib.Path("dist").iterdir()):
-              digest = hashlib.sha256(dist.read_bytes()).hexdigest()
-              if remote.get(dist.name) != digest:
-                  sys.exit(f"{dist.name} does not match the TestPyPI dry-run artifact")
-          print("artifacts match the TestPyPI dry-run")
-          EOF
+      - name: Download the TestPyPI-verified artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf dist
+          gh run download "${{ steps.tagrun.outputs.run_id }}" -n dist -D dist -R "$GITHUB_REPOSITORY"
+          ls -la dist/
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0

@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from mintlayer._jsonrpc import JSONRPCClient
+from mintlayer._jsonrpc import JSONRPCClient, JSONRPCError
 from mintlayer.node import Client, RPCError
 
 _DUMMY_ENDPOINT = "http://127.0.0.1:3030"
@@ -86,6 +86,29 @@ def test_request_ids_increment(rpc_server) -> None:
     client.node_version()
     client.node_version()
     assert [payload["id"] for payload in srv.capture.payloads] == [1, 2]
+    client.close()
+
+
+def test_response_id_mismatch_raises(rpc_server) -> None:
+    """A response belonging to another call is not silently misattributed.
+
+    ``rpc_server(raw=...)`` -> ``make_raw_rpc_server`` splices its text
+    verbatim after ``"result":``, so the text ``1,"id":999`` adds a second
+    id key that ``json`` keeps (last one wins). The parsed response id is
+    999 while this fresh client's first request id is 1.
+    """
+    srv = rpc_server(raw='1,"id":999')
+    client = JSONRPCClient(srv.url)
+    with pytest.raises(JSONRPCError, match="response id mismatch: expected 1, got 999"):
+        client.call("node_version", {})
+    client.close()
+
+
+def test_response_null_id_is_tolerated(rpc_server) -> None:
+    """A JSON null response id (notification-style) does not raise."""
+    srv = rpc_server(raw='1,"id":null')
+    client = JSONRPCClient(srv.url)
+    assert client.call("node_version", {}) == 1
     client.close()
 
 

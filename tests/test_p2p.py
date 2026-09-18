@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
+
 from mintlayer.node import BannedPeer, Client, PeerInfo, TrustPolicy
+from mintlayer.node.p2p import _duration_to_wire
 
 _LIST_BANNED_WIRE = '[["1.2.3.4",{"time":[1700000000,0]}]]'
 
@@ -87,6 +90,31 @@ def test_ban_sub_second_duration(rpc_server) -> None:
     client.ban("5.6.7.8", timedelta(seconds=1, microseconds=500_000))
     assert srv.capture.params == {"address": "5.6.7.8", "duration": [1, 500000000]}
     client.close()
+
+
+def test_duration_to_wire_rejects_negative_durations() -> None:
+    """Negative durations fail closed before they can corrupt the wire form.
+
+    Python normalises ``timedelta(seconds=-1)`` to ``(days=-1, seconds=86399)``;
+    encoding that naively would send [86399, 0] (~a 24h ban) instead of -1s.
+    """
+    with pytest.raises(ValueError, match="must not be negative"):
+        _duration_to_wire(timedelta(seconds=-1))
+    with pytest.raises(ValueError, match="must not be negative"):
+        _duration_to_wire(timedelta(days=-2))
+
+
+@pytest.mark.parametrize(
+    ("duration", "wire"),
+    [
+        pytest.param(timedelta(days=1), [86_400, 0], id="one_day"),
+        pytest.param(timedelta(seconds=1), [1, 0], id="one_second"),
+        pytest.param(timedelta(microseconds=1500), [0, 1_500_000], id="sub_second"),
+    ],
+)
+def test_duration_to_wire_positive_durations(duration: timedelta, wire: list[int]) -> None:
+    """Positive durations split into the daemon's [seconds, nanoseconds] pair."""
+    assert _duration_to_wire(duration) == wire
 
 
 def test_p2p_submit_transaction(rpc_server) -> None:

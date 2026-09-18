@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+from pathlib import Path
 
 import pytest
 from wasm_helpers import MemorySpy
@@ -27,15 +28,40 @@ def test_integrity_pin_file_matches_binary() -> None:
     expected = pin_path.read_text().split()[0].strip()
     actual = hashlib.sha256(wasm_core._WASM_BYTES).hexdigest()
     assert actual == expected
-    # The import-time check must also succeed via the same code path.
-    wasm_core._verify_wasm_integrity()
+    # Reloading through the loader exercises the same verify path as import.
+    assert wasm_core._load_and_verify_wasm() == wasm_core._WASM_BYTES
 
 
-def test_integrity_pin_rejects_tampered_binary(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A mismatching binary fails closed with a descriptive error."""
-    monkeypatch.setattr(wasm_core, "_WASM_BYTES", b"tampered")
+def test_integrity_pin_rejects_tampered_binary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A binary whose hash differs from the pin fails closed."""
+    wasm_file = tmp_path / "fake.wasm"
+    wasm_file.write_bytes(b"tampered")
+    original = hashlib.sha256(b"original").hexdigest()
+    wasm_file.with_suffix(".wasm.sha256").write_text(f"{original}\n")
+    monkeypatch.setattr(wasm_core, "_WASM_PATH", wasm_file)
     with pytest.raises(WasmError, match="integrity check failed"):
-        wasm_core._verify_wasm_integrity()
+        wasm_core._load_and_verify_wasm()
+
+
+def test_missing_pin_file_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A binary without its sha256 pin file is a packaging error."""
+    wasm_file = tmp_path / "fake.wasm"
+    wasm_file.write_bytes(b"binary")
+    monkeypatch.setattr(wasm_core, "_WASM_PATH", wasm_file)  # no .sha256 written
+    with pytest.raises(WasmError, match="pin file missing"):
+        wasm_core._load_and_verify_wasm()
+
+
+def test_empty_pin_file_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty pin file pins nothing and must not pass verification."""
+    wasm_file = tmp_path / "fake.wasm"
+    wasm_file.write_bytes(b"binary")
+    wasm_file.with_suffix(".wasm.sha256").write_text("")
+    monkeypatch.setattr(wasm_core, "_WASM_PATH", wasm_file)
+    with pytest.raises(WasmError, match="pin file is empty"):
+        wasm_core._load_and_verify_wasm()
 
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────

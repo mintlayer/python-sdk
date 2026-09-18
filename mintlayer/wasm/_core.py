@@ -38,13 +38,17 @@ from wasmtime import Engine, Instance, Linker, Memory, Module, Store, Table
 from .types import Amount, WasmError
 
 _WASM_PATH = Path(__file__).parent / "wasm_wrappers_bg.wasm"
-_WASM_BYTES = _WASM_PATH.read_bytes()
 
 
-def _verify_wasm_integrity() -> None:
-    """Fail closed if the vendored WASM binary does not match its pinned hash."""
+def _load_and_verify_wasm() -> bytes:
+    """Load the vendored WASM binary, failing closed if it misses its pin.
+
+    The read happens here (not at module scope) so a packaging mistake raises
+    a descriptive :class:`WasmError` instead of a raw FileNotFoundError.
+    """
     if not _WASM_PATH.is_file():
         raise WasmError(f"mintlayer: WASM binary missing: {_WASM_PATH}")
+    wasm_bytes = _WASM_PATH.read_bytes()
     pin_path = _WASM_PATH.with_suffix(".wasm.sha256")
     try:
         pin = pin_path.read_text().split()
@@ -53,15 +57,16 @@ def _verify_wasm_integrity() -> None:
     if not pin:
         raise WasmError(f"mintlayer: WASM integrity pin file is empty: {pin_path}")
     expected = pin[0].strip()
-    actual = hashlib.sha256(_WASM_BYTES).hexdigest()
+    actual = hashlib.sha256(wasm_bytes).hexdigest()
     if actual != expected:
         raise WasmError(
             f"mintlayer: WASM binary integrity check failed "
             f"(expected sha256 {expected}, got {actual})"
         )
+    return wasm_bytes
 
 
-_verify_wasm_integrity()
+_WASM_BYTES = _load_and_verify_wasm()
 
 
 class _CallState:
