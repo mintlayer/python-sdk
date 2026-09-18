@@ -54,6 +54,11 @@ log = logging.getLogger("send-coins")
 
 FEE_RATE_PER_KB_FALLBACK = 100_000  # atoms/KB used when the indexer has no fee data
 
+# Change outputs below this many atoms are dropped (the remainder goes to
+# fees): a dust output may be rejected by nodes and costs more to spend
+# than it is worth.
+DUST_THRESHOLD_ATOMS = 1_000_000  # 0.00001 ML
+
 
 def is_coin_transfer(output: object) -> bool:
     """Whether a decoded UTXO output is a plain Transfer of native coins.
@@ -191,8 +196,14 @@ def main() -> None:
         if change < 0:
             raise ValueError(f"insufficient balance for fee: have {total}, need {send_amt} + {fee}")
         outputs = wasm.encode_output_transfer(Amount(atoms=str(send_amt)), args.to, network)
-        if change > 0:
+        if change > DUST_THRESHOLD_ATOMS:
             outputs += wasm.encode_output_transfer(Amount(atoms=str(change)), from_addr, network)
+        elif change > 0:
+            log.warning(
+                "dropping dust change of %d atoms (below %d); remainder goes to fees",
+                change,
+                DUST_THRESHOLD_ATOMS,
+            )
         tx = wasm.encode_transaction(encoded_inputs, outputs, 0)
         # The size estimate needs the encoded INPUTS blob (one address per input).
         size = wasm.estimate_transaction_size(

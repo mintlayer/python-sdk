@@ -110,26 +110,32 @@ class Client:
         self._wasm: WASMClient | None = None
 
         self.node: NodeClient | None = None
-        if cfg.node_url:
-            self.node = NodeClient(
-                cfg.node_url,
-                username=cfg.username,
-                password=cfg.password,
-                timeout=cfg.timeout,
-            )
-
         self.indexer: IndexerClient | None = None
-        if cfg.indexer_url:
-            self.indexer = IndexerClient(cfg.indexer_url, timeout=cfg.timeout)
-
         self.wallet: WalletClient | None = None
-        if cfg.wallet_url:
-            self.wallet = WalletClient(
-                cfg.wallet_url,
-                username=cfg.username,
-                password=cfg.password,
-                timeout=cfg.timeout,
-            )
+        try:
+            if cfg.node_url:
+                self.node = NodeClient(
+                    cfg.node_url,
+                    username=cfg.username,
+                    password=cfg.password,
+                    timeout=cfg.timeout,
+                )
+
+            if cfg.indexer_url:
+                self.indexer = IndexerClient(cfg.indexer_url, timeout=cfg.timeout)
+
+            if cfg.wallet_url:
+                self.wallet = WalletClient(
+                    cfg.wallet_url,
+                    username=cfg.username,
+                    password=cfg.password,
+                    timeout=cfg.timeout,
+                )
+        except BaseException:
+            # A later constructor failing (e.g. the cleartext-credential guard)
+            # must not leak the sessions of already-created sub-clients.
+            self.close()
+            raise
 
     def init_wasm(self) -> None:
         """Initialise the embedded WASM cryptography runtime (~400 ms).

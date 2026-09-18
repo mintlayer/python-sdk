@@ -180,7 +180,9 @@ jobs:
               sys.exit(f"version {version} not found on TestPyPI - cut the tag first")
           for dist in sorted(pathlib.Path("dist").iterdir()):
               digest = hashlib.sha256(dist.read_bytes()).hexdigest()
-              if remote.get(dist.name) != digest:
+              if dist.name not in remote:
+                  sys.exit(f"{dist.name} is not published on TestPyPI for version {version}")
+              if remote[dist.name] != digest:
                   sys.exit(f"{dist.name} does not match the TestPyPI dry-run artifact")
           print("artifacts match the TestPyPI dry-run")
           EOF

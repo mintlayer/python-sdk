@@ -314,6 +314,12 @@ class _WasmCore:
         return self._write_bytes(s.encode("utf-8"))
 
     def _free_wasm(self, ptr: int, size: int, align: int = 1) -> None:
+        """Free a host-owned WASM allocation.
+
+        Failures are deliberately swallowed: a cleanup error must not mask
+        the call's outcome, and if the allocator is genuinely corrupted the
+        NEXT wasm call traps loudly anyway (surfaces as WasmError).
+        """
         if ptr == 0:
             return
         with contextlib.suppress(Exception):

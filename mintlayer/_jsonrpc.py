@@ -96,6 +96,12 @@ class JSONRPCClient:
 
         ``params`` must be a JSON-serialisable object (dict); no-arg methods
         pass ``{}``. A JSON-RPC error object raises :class:`RPCError`.
+
+        Thread-safety: the id counter and per-call flow are synchronised, and
+        the daemons are cookie-less, so concurrent calls share the session's
+        connection pool safely (urllib3 pool is thread-safe). Sessions carry
+        no per-call state here; a caller-supplied session that mutates state
+        (cookies, hooks) is the caller's responsibility to synchronise.
         """
         with self._lock:
             self._id += 1
