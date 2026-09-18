@@ -16,11 +16,12 @@ on:
   release:
     types: [published]
 
-# id-token is required by pypa/gh-action-pypi-publish to sign PEP 740
-# attestations, independent of the API-token authentication used below.
+# id-token / attestations intentionally omitted: publishing authenticates
+# with an API token stored in the environment secrets. PEP 740 attestations
+# require OIDC trusted publishing; re-enable both if the project migrates
+# to trusted publishing (which would also eliminate the long-lived token).
 permissions:
   contents: read
-  id-token: write
 
 # Never cancel a publish in flight.
 concurrency:
@@ -44,6 +45,24 @@ jobs:
 
       - name: Install Python
         run: uv python install 3.12
+
+      - name: Sync dependencies (locked)
+        run: uv sync --locked --group dev --python 3.12
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check mintlayer/ tests/ examples/
+
+      - name: Mypy
+        run: uv run mypy mintlayer/
+
+      - name: Run tests with coverage
+        run: >
+          uv run pytest tests/ -q
+          --cov --cov-report=term-missing
+          --cov-fail-under=80
 
       - name: Verify tag matches package version
         run: |
@@ -72,7 +91,7 @@ jobs:
           w = WasmClient()
           # Keys carry a one-byte WASM ABI status prefix: priv=33, pub=34.
           priv = w.make_private_key()
-          assert len(priv) in (32, 33) and any(priv), "bad private key"
+          assert len(priv) == 33 and any(priv), f"bad private key length {len(priv)}"
           pub = w.public_key_from_private_key(priv)
           assert pub[1:2] in (b"\x02", b"\x03"), "pubkey not compressed SEC1"
           addr = w.pubkey_to_pubkeyhash_address(pub, MAINNET)
@@ -106,6 +125,7 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          attestations: false
 
   publish-pypi:
     name: Publish to PyPI
@@ -121,7 +141,29 @@ jobs:
           name: dist
           path: dist/
 
+      # The manual gate only means something if PyPI receives the exact bytes
+      # that were verified as the TestPyPI dry-run: refuse to publish unless
+      # every artifact's sha256 matches what TestPyPI has for this version.
+      - name: Verify artifacts match the TestPyPI dry-run
+        run: |
+          python3 - <<'EOF'
+          import hashlib, json, os, pathlib, sys, urllib.request
+
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          url = f"https://test.pypi.org/pypi/mintlayer/{version}/json"
+          with urllib.request.urlopen(url, timeout=30) as resp:
+              remote = {u["filename"]: u["digests"]["sha256"] for u in json.load(resp)["urls"]}
+          if not remote:
+              sys.exit(f"version {version} not found on TestPyPI - cut the tag first")
+          for dist in sorted(pathlib.Path("dist").iterdir()):
+              digest = hashlib.sha256(dist.read_bytes()).hexdigest()
+              if remote.get(dist.name) != digest:
+                  sys.exit(f"{dist.name} does not match the TestPyPI dry-run artifact")
+          print("artifacts match the TestPyPI dry-run")
+          EOF
+
       - name: Publish
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false

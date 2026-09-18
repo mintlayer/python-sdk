@@ -24,6 +24,7 @@ tests use the :func:`rest_server` factory fixture, which works the same way.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -237,7 +238,10 @@ def rpc_server():
     yield _start
 
     for handle in handles:
-        handle.stop()
+        # One failing shutdown must not abort the loop and leak the
+        # remaining servers' sockets/threads.
+        with contextlib.suppress(Exception):
+            handle.stop()
 
 
 # --- REST servers (indexer client) -------------------------------------------

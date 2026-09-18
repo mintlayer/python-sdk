@@ -21,10 +21,13 @@ from __future__ import annotations
 
 import threading
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 
 __all__ = ["JSONRPCError", "RPCError", "JSONRPCClient"]
+
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 class _NoAuth(requests.auth.AuthBase):
@@ -47,6 +50,25 @@ class RPCError(Exception):
         self.message = message
 
 
+def _assert_credential_safety(endpoint: str) -> None:
+    """Refuse basic-auth credentials over cleartext http to non-loopback hosts.
+
+    The node/wallet daemons hold wallet-signing credentials; a misconfigured
+    remote ``http://`` URL would transmit them in cleartext. Loopback http is
+    allowed (local daemons with auth enabled).
+    """
+    parsed = urlsplit(endpoint)
+    if parsed.scheme != "http":
+        return
+    host = (parsed.hostname or "").lower()
+    if host in _LOOPBACK_HOSTS:
+        return
+    raise ValueError(
+        f"refusing to send basic-auth credentials over cleartext http:// to "
+        f"non-loopback host {host!r}; use https:// or a loopback address"
+    )
+
+
 class JSONRPCClient:
     """Minimal JSON-RPC 2.0 over HTTP POST client."""
 
@@ -58,6 +80,8 @@ class JSONRPCClient:
         timeout: float = 30.0,
         session: requests.Session | None = None,
     ) -> None:
+        if username:
+            _assert_credential_safety(endpoint)
         self.endpoint = endpoint
         self.username = username
         self.password = password

@@ -10,6 +10,7 @@ import json
 
 import pytest
 
+from mintlayer._jsonrpc import JSONRPCClient
 from mintlayer.node import Client, RPCError
 
 _DUMMY_ENDPOINT = "http://127.0.0.1:3030"
@@ -86,3 +87,38 @@ def test_request_ids_increment(rpc_server) -> None:
     client.node_version()
     assert [payload["id"] for payload in srv.capture.payloads] == [1, 2]
     client.close()
+
+
+class TestCredentialSafetyGuard:
+    """Basic-auth credentials must not go over cleartext http to remote hosts.
+
+    The guard fires in ``JSONRPCClient.__init__``, before any network I/O.
+    """
+
+    def test_cleartext_http_nonloopback_with_username_raises(self) -> None:
+        with pytest.raises(ValueError, match="basic-auth") as excinfo:
+            JSONRPCClient("http://example.com:7103", username="user")
+        assert "example.com" in str(excinfo.value)
+
+    def test_cleartext_http_loopback_ipv4_allowed(self) -> None:
+        client = JSONRPCClient("http://127.0.0.1:7103", username="user", password="pw")
+        client.close()
+
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            pytest.param("http://localhost:7103", id="localhost"),
+            pytest.param("http://[::1]:7103", id="ipv6_loopback"),
+        ],
+    )
+    def test_cleartext_http_loopback_hosts_allowed(self, endpoint: str) -> None:
+        client = JSONRPCClient(endpoint, username="user")
+        client.close()
+
+    def test_https_nonloopback_with_username_allowed(self) -> None:
+        client = JSONRPCClient("https://example.com", username="user")
+        client.close()
+
+    def test_cleartext_http_without_username_allowed(self) -> None:
+        client = JSONRPCClient("http://example.com")
+        client.close()

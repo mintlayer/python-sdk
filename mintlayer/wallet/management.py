@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .._jsonrpc import JSONRPCError
 from ._core import _WalletCore
 from .types import (
     AccountInfo,
@@ -76,6 +77,8 @@ class ManagementMixin(_WalletCore):
     def new_address(self, account: int) -> str:
         """Derive a new receiving address for the account."""
         data = self._call("address_new", {"account": account})
+        if not data:
+            raise JSONRPCError("address_new: expected object result, got null")
         return str(data["address"])
 
     def show_receive_addresses(self, account: int) -> list[AddressWithUsage]:
@@ -89,6 +92,8 @@ class ManagementMixin(_WalletCore):
     def reveal_public_key(self, account: int, address: str) -> str:
         """Reveal the hex public key backing an address."""
         data = self._call("address_reveal_public_key", {"account": account, "address": address})
+        if not data:
+            raise JSONRPCError("address_reveal_public_key: expected object result, got null")
         return str(data["public_key_hex"])
 
     def encrypt_private_keys(self, password: str) -> None:

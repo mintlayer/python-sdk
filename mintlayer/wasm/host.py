@@ -102,15 +102,16 @@ def register_host_functions(client: _WasmCore, linker: Linker) -> None:
         failures surface even if the WASM error path never calls
         ``__wbindgen_cast_...2`` (a later cast still overwrites it with the
         richer Rust-side message).
+
+        ``__wbindgen_exn_store`` receives the externref holding the exception
+        value (JS stores the ``Error`` object); we store the message string so
+        the WASM unwind path reads this call's payload instead of a stale slot.
         """
         if not state.err_msg:
             state.err_msg = msg
-        if client.get_export("__externref_table_alloc") is None:
-            return
         if client.get_export("__wbindgen_exn_store") is None:
             return
-        idx = invoke("__externref_table_alloc")[0]
-        invoke("__wbindgen_exn_store", idx)
+        invoke("__wbindgen_exn_store", alloc_table_slot(msg))
 
     def write_string_to_mem(out_ptr: int, s: str) -> None:
         """Write (ptr, len) of ``s`` as two LE u32s at ``out_ptr``."""
@@ -130,7 +131,10 @@ def register_host_functions(client: _WasmCore, linker: Linker) -> None:
             signal_exception("fillRandom: expected Uint8Array")
             return
         data = os.urandom(buf.length)
-        client.memory.write(store, data, buf.ptr)
+        # A failed write must never pass silently: the WASM side would proceed
+        # with stale/zero bytes as key material.
+        if client.memory.write(store, data, buf.ptr) is None:
+            signal_exception("fillRandom: memory write failed")
 
     def debug_string(value: Any) -> str:
         if value is None:

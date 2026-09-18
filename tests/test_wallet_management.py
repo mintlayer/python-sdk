@@ -235,6 +235,15 @@ def test_new_address(rpc_server) -> None:
     client.close()
 
 
+def test_new_address_null_result_raises(rpc_server) -> None:
+    """A JSON null result raises JSONRPCError, not an opaque TypeError."""
+    srv = rpc_server(result=None)
+    client = Client(srv.url)
+    with pytest.raises(JSONRPCError, match="expected object result, got null"):
+        client.new_address(0)
+    client.close()
+
+
 def test_show_receive_addresses(rpc_server) -> None:
     result = [
         {"address": "tmltool1abc", "used": False, "coins": {"atoms": "0"}},
@@ -276,6 +285,15 @@ def test_reveal_public_key_result_decode() -> None:
     )
     assert got.public_key_hex == "02aabbccdd"
     assert got.public_key_address == "tmltool1pubkey"
+
+
+def test_reveal_public_key_null_result_raises(rpc_server) -> None:
+    """A JSON null result raises JSONRPCError, not an opaque TypeError."""
+    srv = rpc_server(result=None)
+    client = Client(srv.url)
+    with pytest.raises(JSONRPCError, match="expected object result, got null"):
+        client.reveal_public_key(0, "tmltool1abc")
+    client.close()
 
 
 def test_encrypt_private_keys(rpc_server) -> None:

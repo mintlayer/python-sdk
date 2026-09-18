@@ -28,6 +28,11 @@ def parse_uint64(data: Any) -> int:
     if isinstance(data, str):
         if not _DIGITS.fullmatch(data):
             raise IndexerError(f"Uint64: invalid value {data!r}")
+        if len(data) > 20 or (len(data) == 20 and data > "18446744073709551615"):
+            # Cannot be a uint64 (max 18446744073709551615, 20 digits). Also
+            # avoids the 3.11+ int-to-str digit limit raising a bare ValueError
+            # for hostile oversized payloads.
+            raise IndexerError(f"Uint64: value out of range {data!r}")
         return int(data, 10)
     raise IndexerError(f"Uint64: invalid value {data!r}")
 

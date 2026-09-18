@@ -3,11 +3,26 @@
 :class:`~mintlayer.wasm.client.Client` combines this core with the per-area
 method mixins (keys, addresses, transactions, ...).
 
-Key material in memory: result buffers carrying private keys, derived keys and
-signatures are zeroed before being released, but input buffers and WASM-side
-intermediate copies of secrets persist in WASM linear memory until the
-allocator reuses them (inherited from the wasm-bindgen design; the host cannot
-reach them). Treat the process memory of a long-lived ``Client`` as sensitive.
+Memory ownership protocol (verified against the wasm-bindgen JS glue that
+ships with the vendored binary — see the ``web-gui`` repository's
+``app/wasm-wrappers`` for the byte-identical build):
+
+* **Plain inputs** (``_write_string``/``_write_bytes``): the WASM callee takes
+  ownership (Rust ``String``/``Vec<u8>`` parameters) and frees them when the
+  call returns. The glue never frees them host-side; neither must we — a
+  host-side free is a double free that corrupts the allocator.
+* **String-array arguments** (``_write_string_array``): the callee owns the
+  table slots and the index array; the host releases nothing after the call.
+  Only a pre-call write failure is rolled back.
+* **Byte-array-array arguments** (``_write_uint8_array_array``): the callee
+  owns the table slots and the index array, but the per-slice backing buffers
+  are host-malloc'd and only copied (``to_vec``) — the host frees the backing
+  buffers after the call (see ``intent.py``).
+* **Result buffers**: host-owned; read, zeroed and freed by the
+  ``_call_return_*`` helpers.
+
+Treat the process memory of a long-lived ``Client`` as sensitive: key
+material passes through WASM linear memory.
 """
 
 from __future__ import annotations
@@ -261,7 +276,14 @@ class _WasmCore:
         return self.memory.read(self.store, ptr, ptr + length)
 
     def _write_bytes(self, data: bytes) -> tuple[int, int]:
-        """Copy ``data`` into WASM heap; returns (ptr, len). Caller frees."""
+        """Copy ``data`` into WASM heap; returns (ptr, len).
+
+        The buffer becomes callee-owned: the WASM function takes the bytes by
+        value and frees them when it returns. Do NOT free host-side — that is
+        a double free. (``amount_from_atoms`` is likewise callee-owned; the
+        error path in :meth:`_new_wasm_amount` frees only because ownership
+        was never transferred.)
+        """
         if not data:
             return 0, 0
         ptr = self._invoke1("__wbindgen_malloc", len(data), 1)
@@ -361,10 +383,13 @@ class _WasmCore:
         """Write ``[bytes]`` as an array of externref table indices.
 
         Each slice is copied into WASM heap and wrapped as a Uint8Array.
-        Returns (array_ptr, table_indices, backing_buffers). Release the table
-        slots with :meth:`_dealloc_indices` and free the backing buffers
-        (host-side) after the call: the callee copies the bytes and never
-        frees the originals; the index array itself is callee-owned.
+        Returns (array_ptr, table_indices, backing_buffers). After the call:
+        the table slots and the index array are CALLEE-OWNED — never dealloc
+        them (doing so corrupts the table free list, observed as
+        ``unreachable`` traps on subsequent calls). The backing buffers,
+        however, are malloc'd host-side and only copied by the callee
+        (``to_vec``): the host frees those after the call (see
+        ``intent.encode_signed_transaction_intent``).
         """
         from .host import Uint8ArrayRef
 
