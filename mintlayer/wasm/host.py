@@ -106,6 +106,11 @@ def register_host_functions(client: _WasmCore, linker: Linker) -> None:
         ``__wbindgen_exn_store`` receives the externref holding the exception
         value (JS stores the ``Error`` object); we store the message string so
         the WASM unwind path reads this call's payload instead of a stale slot.
+
+        Like the JS glue and go-sdk's host, the host function itself returns
+        normally after stashing — whether the callee converts the stored
+        exception into an Err is decided by the module's generated code
+        (wasm-bindgen contract); the host cannot force an Err return.
         """
         if not state.err_msg:
             state.err_msg = msg

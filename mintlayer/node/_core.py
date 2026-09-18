@@ -52,4 +52,11 @@ class _NodeCore(BaseJSONRPCClient):
 
     def _call_opt_amount(self, method: str, params: Any) -> Amount | None:
         result = self._rpc.call(method, params)
-        return Amount.from_json(result) if result is not None else None
+        if result is None:
+            return None
+        try:
+            return Amount.from_json(result)
+        except (ValueError, KeyError, TypeError) as exc:
+            # Amount.from_json raises bare ValueError/KeyError; decoding
+            # failures must surface as the documented JSONRPCError contract.
+            raise JSONRPCError(f"{method}: invalid amount payload {result!r}") from exc

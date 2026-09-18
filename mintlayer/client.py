@@ -141,6 +141,10 @@ class Client:
         """Initialise the embedded WASM cryptography runtime (~400 ms).
 
         Subsequent calls are no-ops. Safe for concurrent use.
+
+        The lock is deliberately held for the whole construction: a
+        concurrent ``wasm`` access must wait for a fully-built client rather
+        than observe a half-initialised one (or trigger duplicate builds).
         """
         with self._mu:
             if self._wasm is None:

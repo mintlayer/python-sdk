@@ -20,11 +20,8 @@ on:
 # with an API token stored in the environment secrets. PEP 740 attestations
 # require OIDC trusted publishing; re-enable both if the project migrates
 # to trusted publishing (which would also eliminate the long-lived token).
-# actions:read lets publish-pypi download the dist/ artifact produced by the
-# earlier tag-push run.
 permissions:
   contents: read
-  actions: read
 
 # Never cancel a publish in flight.
 concurrency:
@@ -137,6 +134,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: pypi
+    # Only this job needs cross-run artifact download access; build runs
+    # project code and must not carry it.
+    permissions:
+      contents: read
+      actions: read
     steps:
       # Rebuilds are not guaranteed byte-reproducible (wheel zip timestamps),
       # so instead of building again we publish the EXACT dist/ artifact that
