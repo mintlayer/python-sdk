@@ -7,14 +7,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._core import _NodeCore
+from ._core import _decode_model, _NodeCore
 from .types import Amount, ChainstateInfo, Currency, OrderInfo, Outpoint, TokenInfo
 
 
 class ChainstateMixin(_NodeCore):
     def chainstate_info(self) -> ChainstateInfo:
         """Return the current chainstate summary."""
-        return ChainstateInfo.from_json(self._call("chainstate_info", {}))
+        return _decode_model(
+            "chainstate_info",
+            ChainstateInfo.from_json,
+            self._call("chainstate_info", {}),
+        )
 
     def best_block_id(self) -> str:
         """Return the best block ID (hex, no 0x prefix)."""
@@ -77,17 +81,28 @@ class ChainstateMixin(_NodeCore):
     def token_info(self, token_id: str) -> TokenInfo | None:
         """Return token info (tagged union; None if unknown)."""
         data = self._call("chainstate_token_info", {"token_id": token_id})
-        return TokenInfo.from_json(data) if data is not None else None
+        return (
+            _decode_model("chainstate_token_info", TokenInfo.from_json, data)
+            if data is not None
+            else None
+        )
 
     def tokens_info(self, token_ids: list[str]) -> list[TokenInfo]:
         """Return info for multiple token IDs."""
         data = self._call("chainstate_tokens_info", {"token_ids": token_ids})
-        return [TokenInfo.from_json(item) for item in data or []]
+        return [
+            _decode_model("chainstate_tokens_info", TokenInfo.from_json, item)
+            for item in data or []
+        ]
 
     def order_info(self, order_id: str) -> OrderInfo | None:
         """Return order info (None if unknown)."""
         data = self._call("chainstate_order_info", {"order_id": order_id})
-        return OrderInfo.from_json(data) if data is not None else None
+        return (
+            _decode_model("chainstate_order_info", OrderInfo.from_json, data)
+            if data is not None
+            else None
+        )
 
     def orders_info_by_currencies(
         self, ask: Currency | None, give: Currency | None
@@ -103,7 +118,10 @@ class ChainstateMixin(_NodeCore):
                 "give_currency": give.to_json() if give is not None else None,
             },
         )
-        return {k: OrderInfo.from_json(v) for k, v in (data or {}).items()}
+        return {
+            k: _decode_model("chainstate_orders_info_by_currencies", OrderInfo.from_json, v)
+            for k, v in (data or {}).items()
+        }
 
     def submit_block(self, block_hex: str) -> None:
         """Submit a fully serialized block (hex)."""

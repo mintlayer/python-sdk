@@ -225,7 +225,7 @@ def test_chainstate_info_best_block_height_rejects_non_int(rpc_server) -> None:
     }
     srv = rpc_server(result=payload)
     client = Client(srv.url)
-    with pytest.raises(ValueError, match="invalid best_block_height"):
+    with pytest.raises(JSONRPCError, match="invalid best_block_height"):
         client.chainstate_info()
     client.close()
 

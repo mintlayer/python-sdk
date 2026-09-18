@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from mintlayer._jsonrpc import BaseJSONRPCClient, JSONRPCError
 
 from .types import Amount
+
+_T = TypeVar("_T")
+
+
+def _decode_model(method: str, factory: Callable[[Any], _T], data: Any) -> _T:
+    """Run a ``from_json`` decoder, converting malformed payloads to the
+    documented JSONRPCError contract (mirrors the indexer's _safe_from_json).
+    """
+    try:
+        return factory(data)
+    except JSONRPCError:
+        raise
+    except (KeyError, TypeError, ValueError) as exc:
+        raise JSONRPCError(f"{method}: malformed result ({exc!r})") from exc
 
 
 class _NodeCore(BaseJSONRPCClient):
@@ -54,9 +69,6 @@ class _NodeCore(BaseJSONRPCClient):
         result = self._rpc.call(method, params)
         if result is None:
             return None
-        try:
-            return Amount.from_json(result)
-        except (ValueError, KeyError, TypeError) as exc:
-            # Amount.from_json raises bare ValueError/KeyError; decoding
-            # failures must surface as the documented JSONRPCError contract.
-            raise JSONRPCError(f"{method}: invalid amount payload {result!r}") from exc
+        # Amount.from_json raises bare ValueError/KeyError; decoding failures
+        # must surface as the documented JSONRPCError contract.
+        return _decode_model(method, Amount.from_json, result)

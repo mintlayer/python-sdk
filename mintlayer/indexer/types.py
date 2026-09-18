@@ -506,7 +506,7 @@ def _safe_from_json(cls: type[_T]) -> classmethod:
             return original(cls_, data)
         except IndexerError:
             raise
-        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        except (AttributeError, KeyError, TypeError, ValueError, OverflowError) as exc:
             raise IndexerError(f"{cls_.__name__}: malformed payload ({exc!r})") from exc
 
     return classmethod(from_json)

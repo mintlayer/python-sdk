@@ -43,8 +43,10 @@ _WASM_PATH = Path(__file__).parent / "wasm_wrappers_bg.wasm"
 def _load_and_verify_wasm() -> bytes:
     """Load the vendored WASM binary, failing closed if it misses its pin.
 
-    The read happens here (not at module scope) so a packaging mistake raises
-    a descriptive :class:`WasmError` instead of a raw FileNotFoundError.
+    The read and verification live in this single function so that any
+    packaging mistake raises a descriptive :class:`WasmError` — at import
+    time, which is intentional: a broken install must fail fast, not at
+    first use deep inside a wallet operation.
     """
     if not _WASM_PATH.is_file():
         raise WasmError(f"mintlayer: WASM binary missing: {_WASM_PATH}")

@@ -42,7 +42,11 @@ def parse_per_thousand(data: Any) -> float:
     if isinstance(data, bool):
         raise IndexerError(f"PerThousand: invalid value {data!r}")
     if isinstance(data, (int, float)):
-        value = float(data)
+        try:
+            value = float(data)
+        except OverflowError as exc:
+            # float(10**400) raises OverflowError, not ValueError.
+            raise IndexerError(f"PerThousand: value out of range {data!r}") from exc
         if not math.isfinite(value):
             raise IndexerError(f"PerThousand: non-finite value {data!r}")
         return value

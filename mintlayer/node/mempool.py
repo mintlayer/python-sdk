@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ._core import _NodeCore
+from ._core import _decode_model, _NodeCore
 from .types import FeeRate, FeeRatePoint, MempoolTx, TrustPolicy
 from .types import policy_value as _policy_value
 
@@ -19,7 +19,11 @@ class MempoolMixin(_NodeCore):
     def get_transaction(self, tx_id: str) -> MempoolTx | None:
         """Return the mempool transaction (None if not present)."""
         data = self._call("mempool_get_transaction", {"tx_id": tx_id})
-        return MempoolTx.from_json(data) if data is not None else None
+        return (
+            _decode_model("mempool_get_transaction", MempoolTx.from_json, data)
+            if data is not None
+            else None
+        )
 
     def mempool_submit_transaction(self, tx_hex: str, trust_policy: TrustPolicy | str) -> None:
         """Submit a transaction to the local mempool only (no P2P broadcast).
@@ -35,12 +39,19 @@ class MempoolMixin(_NodeCore):
     def get_fee_rate(self, in_top_x_mb: int) -> FeeRate | None:
         """Return the fee rate to land in the top ``in_top_x_mb`` MB of the mempool."""
         data = self._call("mempool_get_fee_rate", {"in_top_x_mb": in_top_x_mb})
-        return FeeRate.from_json(data) if data is not None else None
+        return (
+            _decode_model("mempool_get_fee_rate", FeeRate.from_json, data)
+            if data is not None
+            else None
+        )
 
     def get_fee_rate_points(self) -> list[FeeRatePoint]:
         """Return the mempool fee rate histogram."""
         data = self._call("mempool_get_fee_rate_points", {})
-        return [FeeRatePoint.from_json(item) for item in data or []]
+        return [
+            _decode_model("mempool_get_fee_rate_points", FeeRatePoint.from_json, item)
+            for item in data or []
+        ]
 
     def memory_usage(self) -> int:
         """Return the mempool memory usage in bytes."""
