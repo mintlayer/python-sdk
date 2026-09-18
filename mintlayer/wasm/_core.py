@@ -43,8 +43,16 @@ _WASM_BYTES = _WASM_PATH.read_bytes()
 
 def _verify_wasm_integrity() -> None:
     """Fail closed if the vendored WASM binary does not match its pinned hash."""
+    if not _WASM_PATH.is_file():
+        raise WasmError(f"mintlayer: WASM binary missing: {_WASM_PATH}")
     pin_path = _WASM_PATH.with_suffix(".wasm.sha256")
-    expected = pin_path.read_text().split()[0].strip()
+    try:
+        pin = pin_path.read_text().split()
+    except FileNotFoundError as exc:
+        raise WasmError(f"mintlayer: WASM integrity pin file missing: {pin_path}") from exc
+    if not pin:
+        raise WasmError(f"mintlayer: WASM integrity pin file is empty: {pin_path}")
+    expected = pin[0].strip()
     actual = hashlib.sha256(_WASM_BYTES).hexdigest()
     if actual != expected:
         raise WasmError(

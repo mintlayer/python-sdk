@@ -87,12 +87,12 @@ Returns genesis block information (`block_id`, `genesis_message`,
 ### `get_block_id_at_height`
 
 ```python
-def get_block_id_at_height(self, height: int) -> str: ...
+def get_block_id_at_height(self, height: int) -> str | None: ...
 ```
 
-Returns the block ID at a given height. Raises a 404 `HTTPError` if no block
-exists at that height (for example, when querying a height beyond the current
-tip).
+Returns the block ID at a given height, or `None` if the indexer responds
+with JSON null. Raises a 404 `HTTPError` if no block exists at that height
+(for example, when querying a height beyond the current tip).
 
 ---
 

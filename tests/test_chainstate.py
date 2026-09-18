@@ -190,3 +190,26 @@ def test_orders_info_by_currencies_with_filters(rpc_server) -> None:
         "give_currency": {"type": "Token", "content": "tok1"},
     }
     client.close()
+
+
+def test_amount_from_json_valid_string() -> None:
+    """A decimal atom string is the only accepted wire shape."""
+    assert Amount.from_json({"atoms": "100"}) == Amount(atoms="100")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param({"atoms": 100}, id="atoms-int"),
+        pytest.param({"atoms": None}, id="atoms-null"),
+        pytest.param("notadict", id="non-dict-payload"),
+    ],
+)
+def test_amount_from_json_invalid_raises(payload: object) -> None:
+    """A JSON number (or any non-string atoms / non-dict payload) is rejected.
+
+    Amounts are decimal atom strings on the wire; accepting a JSON number
+    would silently corrupt round-trips.
+    """
+    with pytest.raises(ValueError, match="invalid amount payload"):
+        Amount.from_json(payload)  # type: ignore[arg-type]

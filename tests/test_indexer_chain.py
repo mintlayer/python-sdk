@@ -49,6 +49,15 @@ def test_get_block_id_at_height(rest_server) -> None:
     client.close()
 
 
+def test_get_block_id_at_height_null(rest_server) -> None:
+    """A JSON null body maps to None (optional str, not the empty string)."""
+    srv = rest_server(payload=None)
+    client = Client(srv.url)
+    assert client.get_block_id_at_height(100000) is None
+    assert srv.capture.path == "/api/v2/chain/100000"
+    client.close()
+
+
 def test_get_block_id_at_height_path_contains_height(rest_server) -> None:
     srv = rest_server(payload="aabb")
     client = Client(srv.url)

@@ -199,6 +199,14 @@ def main() -> None:
                 break
             fee = new_fee
             tx, size = build(fee)
+        else:
+            # Not converged in 4 passes: make sure the fee still covers the
+            # final size instead of submitting an underpriced transaction.
+            needed = max(1, -(-size // 1000) * fee_rate)
+            if needed > fee:
+                log.warning("fee loop did not converge; rebuilding with %d atoms", needed)
+                fee = needed
+                tx, size = build(fee)
     except ValueError as exc:
         log.fatal("%s", exc)
         sys.exit(1)

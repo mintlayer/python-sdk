@@ -35,7 +35,9 @@ class Amount:
 
     @classmethod
     def from_json(cls, data: Any) -> Amount:
-        if not isinstance(data, dict) or "atoms" not in data:
+        if not isinstance(data, dict) or not isinstance(data.get("atoms"), str):
+            # "atoms" must be a decimal string; a JSON number would silently
+            # corrupt round-trips (the wire contract is strings only).
             raise ValueError(f"invalid amount payload: {data!r}")
         return cls(atoms=data["atoms"])
 

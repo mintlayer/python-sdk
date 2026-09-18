@@ -381,7 +381,10 @@ def rest_server():
     yield _start
 
     for handle in handles:
-        handle.stop()
+        # One failing shutdown must not abort the loop and leak the
+        # remaining servers' sockets/threads.
+        with contextlib.suppress(Exception):
+            handle.stop()
 
 
 # --- WASM client (fully offline) ----------------------------------------------

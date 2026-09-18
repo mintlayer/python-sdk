@@ -15,7 +15,11 @@ class ChainMixin(IndexerHTTP):
         """Return genesis block info."""
         return GenesisInfo.from_json(self.get("/chain/genesis"))
 
-    def get_block_id_at_height(self, height: int) -> str:
-        """Return the block ID at ``height`` (raises HTTPError 404 if unknown)."""
+    def get_block_id_at_height(self, height: int) -> str | None:
+        """Return the block ID at ``height``.
+
+        ``None`` when the indexer responds with JSON null (rare: the endpoint
+        normally raises HTTPError 404 for unknown heights).
+        """
         result = self.get(f"/chain/{_seg(height)}")
-        return "" if result is None else str(result)
+        return None if result is None else str(result)
