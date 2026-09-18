@@ -163,7 +163,9 @@ def main() -> None:
     while True:
         try:
             info = indexer.get_transaction(issue_result.tx_id)
-        except HTTPError:
+        except HTTPError as exc:
+            if exc.status_code != 404:
+                raise  # transport/5xx failures are not "not indexed yet"
             info = None  # not indexed yet — keep polling
         # confirmations is a string; treat "" and "0" as unconfirmed.
         if info and info.confirmations not in ("", "0"):

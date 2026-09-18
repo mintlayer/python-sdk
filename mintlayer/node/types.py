@@ -45,6 +45,13 @@ class Amount:
         return {"atoms": self.atoms}
 
 
+def _require_int(value: Any, field: str) -> int:
+    """Reject bool/float/str where the daemon wire contract says integer."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"invalid {field}: {value!r}")
+    return value
+
+
 @dataclass(frozen=True)
 class Timestamp:
     """Unix seconds."""
@@ -53,7 +60,7 @@ class Timestamp:
 
     @classmethod
     def from_json(cls, data: Any) -> Timestamp:
-        return cls(timestamp=int(data["timestamp"]))
+        return cls(timestamp=_require_int(data["timestamp"], "timestamp"))
 
 
 @dataclass(frozen=True)
@@ -67,7 +74,7 @@ class ChainstateInfo:
     @classmethod
     def from_json(cls, data: dict) -> ChainstateInfo:
         return cls(
-            best_block_height=data["best_block_height"],
+            best_block_height=_require_int(data["best_block_height"], "best_block_height"),
             best_block_id=data["best_block_id"],
             best_block_timestamp=Timestamp.from_json(data["best_block_timestamp"]),
             median_time=Timestamp.from_json(data["median_time"]),

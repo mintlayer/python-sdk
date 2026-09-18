@@ -54,7 +54,9 @@ class Amount:
 
     @classmethod
     def from_json(cls, data: dict) -> Amount:
-        return cls(atoms=data.get("atoms", ""), decimal=data.get("decimal", ""))
+        # Required keys: a truncated payload must surface as IndexerError via
+        # _safe_from_json, not silently decode to a zero-value Amount.
+        return cls(atoms=data["atoms"], decimal=data["decimal"])
 
 
 @dataclass(frozen=True)

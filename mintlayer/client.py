@@ -143,9 +143,10 @@ class Client:
     @property
     def wasm(self) -> WASMClient:
         """The WASM cryptography client; :meth:`init_wasm` must be called first."""
-        if self._wasm is None:
-            raise WasmError("mintlayer: init_wasm() must be called before using client.wasm")
-        return self._wasm
+        with self._mu:
+            if self._wasm is None:
+                raise WasmError("mintlayer: init_wasm() must be called before using client.wasm")
+            return self._wasm
 
     def close(self) -> None:
         """Release WASM resources and close sessions owned by sub-clients."""

@@ -207,9 +207,15 @@ class OutputsMixin(_WasmCore):
     ) -> bytes:
         """Create an output that issues a new fungible token.
 
-        ``supply_amount`` may be ``None`` unless ``total_supply`` is
-        ``TotalSupply.FIXED``.
+        ``supply_amount`` is required when ``total_supply`` is
+        ``TotalSupply.FIXED`` and must be ``None`` otherwise.
         """
+        if (total_supply == TotalSupply.FIXED) != (supply_amount is not None):
+            raise ValueError(
+                "supply_amount is required for TotalSupply.FIXED "
+                "and must be None otherwise "
+                f"(total_supply={total_supply!r}, supply_amount={supply_amount!r})"
+            )
         auth_ptr, auth_len = self._write_string(authority)
         tkr_ptr, tkr_len = self._write_string(token_ticker)
         uri_ptr, uri_len = self._write_string(metadata_uri)

@@ -164,6 +164,27 @@ jobs:
           gh run download "${{ steps.tagrun.outputs.run_id }}" -n dist -D dist -R "$GITHUB_REPOSITORY"
           ls -la dist/
 
+      # Integrity check for the cross-run download: only publish bytes that
+      # are provably identical to what TestPyPI publicly serves for this
+      # version (the dry-run's uploads are the trust anchor).
+      - name: Verify artifacts match TestPyPI
+        run: |
+          python3 - <<'EOF'
+          import hashlib, json, os, pathlib, sys, urllib.request
+
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          url = f"https://test.pypi.org/pypi/mintlayer/{version}/json"
+          with urllib.request.urlopen(url, timeout=30) as resp:
+              remote = {u["filename"]: u["digests"]["sha256"] for u in json.load(resp)["urls"]}
+          if not remote:
+              sys.exit(f"version {version} not found on TestPyPI - cut the tag first")
+          for dist in sorted(pathlib.Path("dist").iterdir()):
+              digest = hashlib.sha256(dist.read_bytes()).hexdigest()
+              if remote.get(dist.name) != digest:
+                  sys.exit(f"{dist.name} does not match the TestPyPI dry-run artifact")
+          print("artifacts match the TestPyPI dry-run")
+          EOF
+
       - name: Publish
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
         with:

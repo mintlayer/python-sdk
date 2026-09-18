@@ -219,8 +219,15 @@ def register_host_functions(client: _WasmCore, linker: Linker) -> None:
         return 0
 
     def _new_with_length(size: int) -> Any:
+        # NOTE: the backing store is deliberately NOT freed host-side. The WASM
+        # module treats these Uint8Arrays as GC-managed JS values: it caches
+        # them in externref table slots (e.g. the RNG scratch buffer) and
+        # reuses them across calls. Freeing on call end would be a use-after-
+        # free; the cost is a bounded, one-time allocation per cached buffer.
         ptr = invoke("__wbindgen_malloc", size, 1)[0]
-        client.memory.write(store, b"\x00" * size, ptr)
+        if client.memory.write(store, b"\x00" * size, ptr) is None:
+            signal_exception("new Uint8Array: memory write failed")
+            return None
         return Uint8ArrayRef(ptr, size)
 
     def _prototypesetcall(dst_ptr: int, dst_len: int, src: Any) -> None:

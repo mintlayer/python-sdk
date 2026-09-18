@@ -95,8 +95,10 @@ class Client(
 ):
     """REST client for the indexer (api-web-server).
 
-    Safe for concurrent use from multiple threads. Any HTTP status >= 400
-    raises :class:`HTTPError`.
+    Requests are thread-safe in the sense that call results are independent;
+    the underlying ``requests.Session`` is shared, and its cookie jar is not
+    synchronised (the indexer API is cookie-less, so this is benign here).
+    Any HTTP status >= 400 raises :class:`HTTPError`.
     """
 
     def __init__(

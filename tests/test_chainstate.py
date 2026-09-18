@@ -197,6 +197,62 @@ def test_amount_from_json_valid_string() -> None:
     assert Amount.from_json({"atoms": "100"}) == Amount(atoms="100")
 
 
+# ── strict integer decoding (node wire contract) ─────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        pytest.param(1.9, id="float"),
+        pytest.param("123", id="numeric-string"),
+        pytest.param(True, id="bool"),
+    ],
+)
+def test_timestamp_from_json_rejects_non_int(bad: object) -> None:
+    """Timestamp seconds must be a JSON integer, not float/str/bool."""
+    with pytest.raises(ValueError, match="invalid timestamp"):
+        Timestamp.from_json({"timestamp": bad})  # type: ignore[dict-item]
+
+
+def test_chainstate_info_best_block_height_rejects_non_int(rpc_server) -> None:
+    """A float ``best_block_height`` is rejected instead of truncated."""
+    payload = {
+        "best_block_height": 100.5,
+        "best_block_id": "aabbccdd",
+        "best_block_timestamp": {"timestamp": 1700000000},
+        "median_time": {"timestamp": 1699999500},
+        "is_initial_block_download": False,
+    }
+    srv = rpc_server(result=payload)
+    client = Client(srv.url)
+    with pytest.raises(ValueError, match="invalid best_block_height"):
+        client.chainstate_info()
+    client.close()
+
+
+def test_chainstate_info_valid_int_payload_still_decodes(rpc_server) -> None:
+    """Real integer payloads keep decoding unchanged (no over-tightening)."""
+    payload = {
+        "best_block_height": 123456,
+        "best_block_id": "aabbccdd",
+        "best_block_timestamp": {"timestamp": 1700000000},
+        "median_time": {"timestamp": 1699999500},
+        "is_initial_block_download": False,
+    }
+    srv = rpc_server(result=payload)
+    client = Client(srv.url)
+    info = client.chainstate_info()
+    assert info.best_block_height == 123456
+    assert info.best_block_timestamp == Timestamp(timestamp=1700000000)
+    client.close()
+
+
+def test_timestamp_from_json_valid_int() -> None:
+    """A genuine JSON int still decodes (bool is excluded by isinstance checks)."""
+    assert Timestamp.from_json({"timestamp": 1700000000}) == Timestamp(timestamp=1700000000)
+    assert Timestamp.from_json({"timestamp": 0}) == Timestamp(timestamp=0)
+
+
 @pytest.mark.parametrize(
     "payload",
     [

@@ -56,16 +56,30 @@ FEE_RATE_PER_KB_FALLBACK = 100_000  # atoms/KB used when the indexer has no fee 
 
 
 def is_coin_transfer(output: object) -> bool:
-    """Whether a decoded UTXO output is a plain Transfer of native coins."""
-    if not isinstance(output, dict) or output.get("type") != "Transfer":
+    """Whether a decoded UTXO output is a plain Transfer of native coins.
+
+    Indexer wire shape (tagged union, see tests/test_indexer_address.py):
+    ``{"Transfer": {"destination": ..., "amount": {"atoms": ...}}}``. Native
+    coins carry a bare ``amount``; token transfers additionally carry a
+    ``token_id``.
+    """
+    if not isinstance(output, dict):
         return False
-    value = output.get("value")
-    return isinstance(value, dict) and value.get("type") == "Coin"
+    transfer = output.get("Transfer")
+    if not isinstance(transfer, dict):
+        return False
+    amount = transfer.get("amount")
+    return (
+        isinstance(amount, dict)
+        and "atoms" in amount
+        and "token_id" not in amount
+        and "tokenId" not in amount
+    )
 
 
 def output_atoms(output: dict) -> int:
     """Atom count of a Transfer/Coin output (pre-validated by is_coin_transfer)."""
-    return int(output["value"]["amount"]["atoms"])
+    return int(output["Transfer"]["amount"]["atoms"])
 
 
 def encode_utxo_entry(wasm: WasmClient, utxo_json: dict, network: Network) -> bytes:
@@ -75,16 +89,15 @@ def encode_utxo_entry(wasm: WasmClient, utxo_json: dict, network: Network) -> by
     if the sighash covers the real output, so a re-encoding failure is fatal
     rather than silently downgraded to a non-UTXO (``0x00``) entry.
     """
-    if utxo_json.get("type") == "Transfer":
-        value = utxo_json["value"]
-        if value.get("type") == "Coin":
-            encoded = wasm.encode_output_transfer(
-                Amount(atoms=value["amount"]["atoms"]),
-                value["destination"],
-                network,
-            )
-            return b"\x01" + encoded
-    raise ValueError(f"unsupported UTXO output type for minimal send: {utxo_json.get('type')!r}")
+    if is_coin_transfer(utxo_json):
+        transfer = utxo_json["Transfer"]
+        encoded = wasm.encode_output_transfer(
+            Amount(atoms=transfer["amount"]["atoms"]),
+            transfer["destination"],
+            network,
+        )
+        return b"\x01" + encoded
+    raise ValueError(f"unsupported UTXO output type for minimal send: {list(utxo_json)!r}")
 
 
 def resolve_mnemonic(cli_value: str) -> str:
@@ -135,7 +148,7 @@ def main() -> None:
     utxos = [u for u in all_utxos if is_coin_transfer(u.output)]
     for u in all_utxos:
         if not is_coin_transfer(u.output):
-            output_type = u.output.get("type") if isinstance(u.output, dict) else None
+            output_type = next(iter(u.output)) if isinstance(u.output, dict) and u.output else None
             log.warning("skipping non-Coin UTXO (type=%s)", output_type)
 
     if not utxos:

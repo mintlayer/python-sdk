@@ -225,3 +225,73 @@ def test_concurrent_calls_are_serialised(wasm: Client) -> None:
     assert not errors
     assert len(keys) == 20
     assert len(set(keys)) == 20
+
+
+# ── host-created Uint8Array scratch buffers ───────────────────────────────────
+
+
+def test_cached_rng_scratch_buffer_survives_across_calls() -> None:
+    """The RNG scratch Uint8Array is cached by the module and never freed host-side.
+
+    The wasm module creates its RNG scratch ``Uint8Array`` once (via the
+    ``__wbg_new_with_length`` host callback) and caches it in an externref
+    table slot, reusing it for every keygen/signing call — mirroring the JS
+    glue where ``new Uint8Array(n)`` is GC-managed, not call-scoped.
+
+    Freeing that backing store at the end of a call would therefore be a
+    use-after-free: the next keygen writes through the cached reference into
+    freed memory and corrupts the allocator free-list (observed as
+    ``memory fault``/``unreachable`` traps on subsequent unrelated calls,
+    e.g. ``encode_multisig_challenge``). The host deliberately keeps
+    ``_new_with_length`` free of any cleanup — see the NOTE in
+    ``mintlayer/wasm/host.py``.
+
+    Asserts two invariants:
+
+    * no host-side free ever targets a (ptr, length) still referenced from
+      the externref table, and
+    * the SAME cached scratch buffer (ptr, length) is reused across two
+      consecutive keygen calls, proving the module caches it — and thus why
+      host-side freeing is forbidden.
+    """
+    from mintlayer.wasm.host import Uint8ArrayRef
+
+    c = Client()
+    try:
+        freed: list[tuple[int, int]] = []
+        original_free = c._free_wasm
+
+        def spy_free(ptr: int, size: int, align: int = 1) -> None:
+            freed.append((ptr, size))
+            original_free(ptr, size, align)
+
+        c._free_wasm = spy_free  # type: ignore[method-assign]
+
+        def cached_refs() -> set[tuple[int, int]]:
+            refs: set[tuple[int, int]] = set()
+            for idx in range(c.table.size(c.store)):
+                value = c.table.get(c.store, idx)
+                if isinstance(value, Uint8ArrayRef):
+                    refs.add((value.ptr, value.length))
+            return refs
+
+        c.make_private_key()
+        cached_first = cached_refs()
+        assert cached_first, "expected the module to cache its RNG scratch Uint8Array"
+
+        c.make_private_key()
+        cached_second = cached_refs()
+
+        reused = cached_first & cached_second
+        assert reused, (
+            "the cached RNG scratch Uint8Array (same ptr, length) must survive and "
+            "be reused across consecutive keygen calls — proving module-side "
+            "caching, which is why host-side freeing would be a use-after-free"
+        )
+        still_referenced = cached_second & set(freed)
+        assert not still_referenced, (
+            "use-after-free: host-side free touched buffer(s) still referenced "
+            f"by the externref table: {sorted(still_referenced)}"
+        )
+    finally:
+        c.close()

@@ -194,8 +194,25 @@ def test_encode_output_issue_fungible_token_fixed(wallet: Wallet, wasm: Client) 
     assert len(out) > 0
 
 
+def test_encode_output_issue_fungible_token_unlimited(wallet: Wallet, wasm: Client) -> None:
+    """UNLIMITED supply must not carry a supply_amount (valid combination)."""
+    out = wasm.encode_output_issue_fungible_token(
+        wallet.addr,
+        "GLD",
+        "",
+        8,
+        TotalSupply.UNLIMITED,
+        None,
+        FreezableToken.NO,
+        HEIGHT,
+        Network.MAINNET,
+    )
+    assert isinstance(out, bytes) and len(out) > 0
+
+
 def test_issue_fixed_supply_without_amount_raises(wallet: Wallet, wasm: Client) -> None:
-    with pytest.raises(WasmError, match="fixed total supply"):
+    """FIXED without supply_amount is rejected before any WASM call."""
+    with pytest.raises(ValueError, match="supply_amount is required for TotalSupply.FIXED"):
         wasm.encode_output_issue_fungible_token(
             wallet.addr,
             "GLD",
@@ -203,6 +220,38 @@ def test_issue_fixed_supply_without_amount_raises(wallet: Wallet, wasm: Client) 
             8,
             TotalSupply.FIXED,
             None,
+            FreezableToken.NO,
+            HEIGHT,
+            Network.MAINNET,
+        )
+
+
+def test_issue_non_fixed_supply_with_amount_raises(wallet: Wallet, wasm: Client) -> None:
+    """A supply_amount together with a non-FIXED supply policy is rejected."""
+    with pytest.raises(ValueError, match="must be None otherwise"):
+        wasm.encode_output_issue_fungible_token(
+            wallet.addr,
+            "GLD",
+            "",
+            8,
+            TotalSupply.UNLIMITED,
+            Amount.from_atoms("1000000"),
+            FreezableToken.NO,
+            HEIGHT,
+            Network.MAINNET,
+        )
+
+
+def test_issue_lockable_supply_with_amount_raises(wallet: Wallet, wasm: Client) -> None:
+    """LOCKABLE behaves like UNLIMITED: a supply_amount is rejected."""
+    with pytest.raises(ValueError, match="must be None otherwise"):
+        wasm.encode_output_issue_fungible_token(
+            wallet.addr,
+            "GLD",
+            "",
+            8,
+            TotalSupply.LOCKABLE,
+            Amount.from_atoms("1000000"),
             FreezableToken.NO,
             HEIGHT,
             Network.MAINNET,
