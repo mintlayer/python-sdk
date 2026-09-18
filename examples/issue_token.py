@@ -40,10 +40,12 @@ import os
 import sys
 import time
 
+from mintlayer._jsonrpc import JSONRPCError
 from mintlayer.wallet import (
     Amount,
     IssueTokenParams,
     MintParams,
+    RPCError,
     TokenMetadata,
     TokenSupply,
 )
@@ -99,8 +101,9 @@ def main() -> None:
     # ── 2. Sync the wallet ───────────────────────────────────────────────────
     try:
         wallet.sync_wallet()
-    except Exception as exc:
-        # Non-fatal: the daemon may already be syncing.
+    except (RPCError, JSONRPCError) as exc:
+        # Non-fatal: the daemon may already be syncing. Deliberately narrow —
+        # programming errors must not be silenced here.
         log.info("sync wallet: %s (continuing)", exc)
 
     # ── 3. Derive a fresh address to act as the token authority ──────────────

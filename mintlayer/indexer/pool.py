@@ -19,7 +19,12 @@ class PoolMixin(IndexerHTTP):
         return Pool.from_json(self.get(f"/pool/{_seg(pool_id)}"))
 
     def get_pool_block_stats(self, pool_id: str, from_time: datetime, to_time: datetime) -> int:
-        """Return the block count produced in the half-open interval [from, to)."""
+        """Return the block count produced in the half-open interval [from, to).
+
+        Naive datetimes are interpreted in the system's local timezone
+        (standard ``datetime.timestamp()`` semantics); pass tz-aware
+        datetimes for unambiguous absolute times.
+        """
         data = self.get(
             f"/pool/{_seg(pool_id)}/block-stats",
             {"from": int(from_time.timestamp()), "to": int(to_time.timestamp())},
