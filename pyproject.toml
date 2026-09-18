@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
@@ -8,18 +8,22 @@ version = "0.1.0"
 description = "Python SDK for the Mintlayer blockchain: node, indexer, and wallet RPC clients plus WASM cryptography and transaction building"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Mintlayer Institutional FZCO", email = "hello@mintlayer.org" }]
 keywords = ["mintlayer", "blockchain", "sdk", "wallet", "crypto"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "requests>=2.31",
+    "requests>=2.32.4",
     "wasmtime>=25.0",
 ]
 
@@ -28,6 +32,7 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
     "mypy>=1.11",
+    "pytest-cov>=7.1.0",  # keep floor in sync with pytest>=8.0
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -45,3 +50,20 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = false
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "wasmtime.*"
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["mintlayer"]
+omit = ["mintlayer/wasm/wasm_wrappers_bg.wasm"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 1

@@ -1,0 +1,196 @@
+name: Publish
+
+# Release flow:
+#   1. Push a tag (git tag v0.1.0 && git push origin v0.1.0)
+#      -> build + verify -> publish to TestPyPI (dry-run).
+#   2. Verify the TestPyPI install, then cut a GitHub Release for the
+#      SAME, already-existing tag -> publish to PyPI.
+#
+# Note: creating a Release for a NEW tag fires both events (GitHub creates
+# the tag first); the event guards below keep each target correct in that
+# case too, but the intended flow above keeps TestPyPI as a manual gate.
+
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+
+# id-token / attestations intentionally omitted: publishing authenticates
+# with an API token stored in the environment secrets. PEP 740 attestations
+# require OIDC trusted publishing; re-enable both if the project migrates
+# to trusted publishing (which would also eliminate the long-lived token).
+permissions:
+  contents: read
+
+# Never cancel a publish in flight.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & verify distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies (locked)
+        run: uv sync --locked --group dev --python 3.12
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check mintlayer/ tests/ examples/
+
+      - name: Mypy
+        run: uv run mypy mintlayer/
+
+      - name: Run tests with coverage
+        run: >
+          uv run pytest tests/ -q
+          --cov --cov-report=term-missing
+          --cov-fail-under=80
+
+      - name: Verify tag matches package version
+        run: |
+          version="$(uv run --no-sync python -c 'import mintlayer; print(mintlayer.__version__)')"
+          echo "package version: $version"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package version v${version}"
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Twine metadata check
+        run: uvx twine check dist/*
+
+      - name: Smoke-test wheel in a clean venv
+        run: |
+          uv venv /tmp/smoke-venv
+          uv pip install --python /tmp/smoke-venv/bin/python dist/*.whl
+          /tmp/smoke-venv/bin/python - <<'EOF'
+          import mintlayer
+          from mintlayer.wasm import Client as WasmClient, MAINNET
+
+          assert mintlayer.__version__
+          w = WasmClient()
+          # Keys carry a one-byte WASM ABI status prefix: priv=33, pub=34.
+          priv = w.make_private_key()
+          assert len(priv) == 33 and any(priv), f"bad private key length {len(priv)}"
+          pub = w.public_key_from_private_key(priv)
+          assert pub[1:2] in (b"\x02", b"\x03"), "pubkey not compressed SEC1"
+          addr = w.pubkey_to_pubkeyhash_address(pub, MAINNET)
+          assert isinstance(addr, str) and addr.startswith("mtc1"), f"bad address {addr!r}"
+          print(f"wheel OK: version={mintlayer.__version__} address={addr[:12]}...")
+          EOF
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: testpypi
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          attestations: false
+
+  publish-pypi:
+    name: Publish to PyPI
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi
+    # Only this job needs cross-run artifact download access; build runs
+    # project code and must not carry it.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # Rebuilds are not guaranteed byte-reproducible (wheel zip timestamps),
+      # so instead of building again we publish the EXACT dist/ artifact that
+      # the tag-push run verified and uploaded to TestPyPI.
+      - name: Locate the tag-push publish run
+        id: tagrun
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME#refs/tags/}"
+          run_id="$(gh run list -R "$GITHUB_REPOSITORY" --workflow publish.yml --event push \
+            --json databaseId,headBranch,conclusion \
+            --jq ".[] | select(.headBranch == \"$tag\" and .conclusion == \"success\") | .databaseId" | head -1)"
+          if [ -z "$run_id" ]; then
+            echo "::error::no successful tag-push publish run for $tag - push the tag first and let the TestPyPI dry-run finish"
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download the TestPyPI-verified artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf dist
+          gh run download "${{ steps.tagrun.outputs.run_id }}" -n dist -D dist -R "$GITHUB_REPOSITORY"
+          ls -la dist/
+
+      # Integrity check for the cross-run download: only publish bytes that
+      # are provably identical to what TestPyPI publicly serves for this
+      # version (the dry-run's uploads are the trust anchor).
+      - name: Verify artifacts match TestPyPI
+        run: |
+          python3 - <<'EOF'
+          import hashlib, json, os, pathlib, sys, urllib.request
+
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          url = f"https://test.pypi.org/pypi/mintlayer/{version}/json"
+          with urllib.request.urlopen(url, timeout=30) as resp:
+              remote = {u["filename"]: u["digests"]["sha256"] for u in json.load(resp)["urls"]}
+          if not remote:
+              sys.exit(f"version {version} not found on TestPyPI - cut the tag first")
+          for dist in sorted(pathlib.Path("dist").iterdir()):
+              digest = hashlib.sha256(dist.read_bytes()).hexdigest()
+              if dist.name not in remote:
+                  sys.exit(f"{dist.name} is not published on TestPyPI for version {version}")
+              if remote[dist.name] != digest:
+                  sys.exit(f"{dist.name} does not match the TestPyPI dry-run artifact")
+          print("artifacts match the TestPyPI dry-run")
+          EOF
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false
