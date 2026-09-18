@@ -123,11 +123,11 @@ class JSONRPCClient:
             raise JSONRPCError(f"decode response: {exc}") from exc
         if not isinstance(body, dict):
             raise JSONRPCError("decode response: unexpected JSON-RPC response shape")
-        # The daemon must echo the request id (JSON null would be a
-        # notification). A mismatched id means the payload belongs to some
-        # other call — fail loudly rather than misattribute it.
+        # The daemon must echo the request id. JSON-RPC 2.0 reserves a null id
+        # for server-side error notifications; a success payload with a null
+        # or mismatched id cannot be attributed to this call — fail loudly.
         resp_id = body.get("id")
-        if resp_id is not None and resp_id != request_id:
+        if resp_id != request_id:
             raise JSONRPCError(f"response id mismatch: expected {request_id}, got {resp_id!r}")
         error = body.get("error")
         if error is not None:

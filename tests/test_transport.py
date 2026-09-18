@@ -104,11 +104,19 @@ def test_response_id_mismatch_raises(rpc_server) -> None:
     client.close()
 
 
-def test_response_null_id_is_tolerated(rpc_server) -> None:
-    """A JSON null response id (notification-style) does not raise."""
+def test_response_null_id_raises(rpc_server) -> None:
+    """A JSON null response id (server-side notification) cannot be
+    attributed to this call and must fail loudly.
+
+    ``rpc_server(raw=...)`` -> ``make_raw_rpc_server`` splices its text
+    verbatim after ``"result":``, so the text ``1,"id":null`` adds a second
+    id key that ``json`` keeps (last one wins). The parsed response id is
+    ``None`` while this fresh client's first request id is 1.
+    """
     srv = rpc_server(raw='1,"id":null')
     client = JSONRPCClient(srv.url)
-    assert client.call("node_version", {}) == 1
+    with pytest.raises(JSONRPCError, match="response id mismatch: expected 1, got None"):
+        client.call("node_version", {})
     client.close()
 
 

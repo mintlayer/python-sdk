@@ -183,6 +183,11 @@ class _WasmCore:
         """fn expects [ptr, len, errRef, errFlag]."""
         ret = self._call(name, *params)
         if len(ret) >= 4 and ret[3] != 0:
+            # No buffer cleanup on the error path, matching the reference
+            # glue: it zeroes the pointer instead of freeing, because ret[0]
+            # is not a valid allocation once the error flag is set (the Rust
+            # Err variant allocates no result) - freeing it could corrupt
+            # the allocator.
             raise self._extract_error(ret[2])
         if len(ret) < 2:
             raise WasmError(f"mintlayer: unexpected return count from {name}")
@@ -213,6 +218,7 @@ class _WasmCore:
         """fn expects [ptr, len, errRef, errFlag]; result is UTF-8."""
         ret = self._call(name, *params)
         if len(ret) >= 4 and ret[3] != 0:
+            # Error-path buffers are not freed: see _call_return_bytes.
             raise self._extract_error(ret[2])
         if len(ret) < 2:
             raise WasmError(f"mintlayer: unexpected return count from {name}")
@@ -337,7 +343,14 @@ class _WasmCore:
             raise
 
     def _read_amount(self, wasm_ptr: int) -> Amount:
-        """Read the atom string from a WASM Amount handle (consumes it)."""
+        """Read the atom string from a WASM Amount handle (consumes it).
+
+        Deliberately uses ``_call_export`` rather than ``_call`` (mirrors
+        go-sdk's readAmount): ``amount_atoms`` decodes after the parent call
+        already extracted its error state, and routing it through ``_call``
+        would reset the per-call ``err_msg``/``last_json`` the parent
+        captured.
+        """
         ret = self._call_export("amount_atoms", wasm_ptr)
         if len(ret) < 2:
             raise WasmError("mintlayer: amount_atoms failed")
@@ -382,7 +395,11 @@ class _WasmCore:
                 idx = self._invoke1("__externref_table_alloc")
                 indices.append(idx)
                 self.table.set(self.store, idx, s)
-                self.memory.write(self.store, idx.to_bytes(4, "little"), arr_ptr + i * 4)
+                if (
+                    self.memory.write(self.store, idx.to_bytes(4, "little"), arr_ptr + i * 4)
+                    is None
+                ):
+                    raise WasmError("mintlayer: memory write failed")
         except BaseException:
             self._dealloc_indices(indices)
             with contextlib.suppress(Exception):
@@ -418,7 +435,11 @@ class _WasmCore:
                 idx = self._invoke1("__externref_table_alloc")
                 indices.append(idx)
                 self.table.set(self.store, idx, Uint8ArrayRef(wasm_ptr, wasm_len))
-                self.memory.write(self.store, idx.to_bytes(4, "little"), arr_ptr + i * 4)
+                if (
+                    self.memory.write(self.store, idx.to_bytes(4, "little"), arr_ptr + i * 4)
+                    is None
+                ):
+                    raise WasmError("mintlayer: memory write failed")
         except BaseException:
             self._dealloc_indices(indices)
             for ptr, length in buffers:
